@@ -1,0 +1,19 @@
+(ocamllex ElmLex)
+
+ (menhir
+   (modules ElmParse)
+   (flags -la 2 
+          --table 
+          ; --trace 
+          --external-tokens Tokens))
+
+(executable
+ (name elmp)
+ (flags :standard -rectypes)
+ (libraries menhirLib core))
+
+(include_subdirs unqualified)
+
+(env
+  (_ 
+    (flags (:standard -warn-error -A))))
