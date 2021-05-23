@@ -1,0 +1,6 @@
+(executable
+  (name elf)
+  (flags :standard -rectypes)
+  (libraries oaklib))
+
+(include_subdirs unqualified)

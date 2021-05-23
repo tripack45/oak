@@ -17,6 +17,8 @@
  *   preform neccssary transformations.
  *)
 
+open Oaklib
+
 open ElAst.Syntax
 open ElAst.Node
 
