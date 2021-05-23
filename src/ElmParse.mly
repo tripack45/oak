@@ -20,8 +20,9 @@ struct
   let var name pos  : var  = node (VarId.of_string name) pos
   let con name pos  : con  = node (ConId.of_string name) pos
   
-  let id_var var : ident = Var var
-  let id_con var : ident = Con var
+  let id_var var      : exposing_ident = Var var
+  let id_tycon con    : exposing_ident = TyCon con
+  let id_abstycon con : exposing_ident = AbsTyCon con
 
   let field name pos : field = node (FieldId.of_string name) pos
 
@@ -52,6 +53,13 @@ struct
       | [Tokens.CONID con]       -> Just (ConId.of_string con)
       | (Tokens.CONID con)::cons -> More (ConId.of_string con, module_path cons)
       | _ -> assert false
+
+  let parse_modid (s : string) (pos : pos) : path =
+    let path =
+      (Lex.LayoutSensitiveLexer.explode_qualified_name s (fst pos))
+      |> Core.List.map ~f:fst
+      |> module_path
+    in node path pos
       
   let parse_qvar (s : string) (pos : pos) : qvar = 
     let (cons, poss, (id_tok, id_pos)) = parse_qualified s pos in
@@ -158,7 +166,6 @@ open Util
 %token <int>WTH_INDENT
 
 %start <Module.m> main
-%start <Expr.expr> exp
 
 %%
 
@@ -175,7 +182,7 @@ body:
 | separated_list(SEMI, topdecl)                                                     { mod_decls $1     }
 
 impdecl:
-| IMPORT qc=qcon as_con=option(as_con) ex=option(exposing)                          { mod_import (qc, as_con, ex) $loc} 
+| IMPORT qc=modid as_con=option(as_con) ex=option(exposing)                          { mod_import (qc, as_con, ex) $loc} 
 
 as_con:
 | AS CONID                                                                          { con $2 $loc             }
@@ -317,8 +324,9 @@ apat:
 
 // Identifiers 
 id:
-| VARID                                                                             { id_con (con $1 $loc)              }
+| VARID                                                                             { id_abstycon (con $1 $loc)         }
 | CONID                                                                             { id_var (var $1 $loc)              }
+| CONID LPAREN DOTDOT RPAREN                                                        { id_tycon (con $1 $loc)            }
 
 var:
 | VARID                                                                             { var $1 $loc }
@@ -336,6 +344,10 @@ literal:
 | STRCONST                                                                          { node (Literal.String $1) $loc }
 
 // ========= "Inlined" lexical syntax ========== 
+modid:
+| QCONID                                                                            { parse_modid $1 $loc }
+| CONID                                                                             { parse_modid $1 $loc }
+
 qconid:
 | QCONID                                                                            { parse_qcon $1 $loc            }
 | CONID                                                                             { qcon (None, con $1 $loc) $loc }

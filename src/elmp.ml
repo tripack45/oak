@@ -27,11 +27,17 @@ let _ =
 
 (* module S = Sort *)
 
+open PhaseResolveSymbols
+
+module M = Core.Int.Map
+
 let m = Parse.parse_src src
 let () = print_endline "----- [Info] EL AST ----"
 let () = Parse.dump_with_layout @@ ElAst.ToString.m_to_string m
 let () = print_endline "----- [Warning] ParenthesesDepth ----"
 let () = Pass.WarnParentheseDepth.dump_result src @@ Pass.WarnParentheseDepth.run ~max_depth:1 m 
+let () = print_endline "----- [Phase] ResolveSymbols ----"
+let m = Pass.PhaseResolveSymbols.resolve ~modpath:None ~export_dict:[] m 
 
 (* let () = 
     print_endline (String.make 20 '=');

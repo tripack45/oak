@@ -45,6 +45,7 @@ module type IDENT = sig
   type t
   val of_string : string -> t
   val to_string : t -> string
+  val compare : t -> t -> int
 end
 
 module VarId : IDENT =
@@ -52,6 +53,7 @@ struct
   type t = string
   let of_string s = s
   let to_string t = t
+  let compare = String.compare
 end
 
 module ConId : IDENT =
@@ -59,6 +61,7 @@ struct
   type t = string
   let of_string s = s
   let to_string t = t
+  let compare = String.compare
 end
 
 module FieldId : IDENT =
@@ -66,6 +69,7 @@ struct
   type t = string
   let of_string s = s
   let to_string t = t
+  let compare = String.compare
 end
 
 (* Definitions of external language syntax elements *)
@@ -88,9 +92,10 @@ struct
 
   type con = ConId.t node
 
-  type ident =
-    | Con of con
-    | Var of var
+  type exposing_ident =
+    | AbsTyCon of con
+    | TyCon    of con
+    | Var      of var
 
   type field = FieldId.t node
 
@@ -169,13 +174,13 @@ struct
 
   type exposing =
     | Any
-    | Idents of ident list
+    | Idents of exposing_ident list
 
   type mdecl = 
     | MDecl of con * exposing option
 
   type import = 
-    | Import of qcon * con option * exposing option
+    | Import of path * con option * exposing option
 
   (* The whole module *)
   type m = 
@@ -272,13 +277,13 @@ struct
   struct 
     type exposing = Syntax.exposing =
       | Any
-      | Idents of ident list
+      | Idents of exposing_ident list
 
     type mdecl = Syntax.mdecl =
       | MDecl of con * exposing option
 
     type import = Syntax.import =
-      | Import of qcon * con option * exposing option
+      | Import of path * con option * exposing option
 
     type m = Syntax.m =
       | Mod of mdecl option * (import list) * (decl list)
@@ -309,10 +314,11 @@ struct
             (Option.value mdecl_str ~default:"module")
             (String.concat ";" (import_strs @ decl_strs))
   and exposing_to_string exposing = 
-    let id_to_string (id : ident) =
+    let id_to_string (id : exposing_ident) =
       match id with
-      | Var var -> var_to_string var
-      | Con con -> con_to_string con
+      | Var var    -> var_to_string var
+      | TyCon con  -> con_to_string con ^ "(..)"
+      | AbsTyCon con -> con_to_string con
     in
     match exposing with 
     | Any -> "(..)"
@@ -325,7 +331,7 @@ struct
     | None -> 
       sprintf "module %s" (con_to_string con)
 
-  and import_to_string (Import (qcon, as_opt, exposing_opt)) = 
+  and import_to_string (Import (path, as_opt, exposing_opt)) = 
     let exposing_str = 
       match Option.map exposing_to_string exposing_opt with 
       | Some s -> " exposing " ^ s 
@@ -336,7 +342,7 @@ struct
       | Some s -> " as " ^ s
       | None -> ""
     in 
-    (sprintf "import %s%s%s" (qcon_to_string qcon) exposing_str as_str)
+    (sprintf "import %s%s%s" (path_to_string path) exposing_str as_str)
 
   and decl_to_string decl = 
     match (Node.elem decl) with
