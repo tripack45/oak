@@ -2,13 +2,14 @@
 
  (menhir
    (modules ElmParse)
+   (infer false)
    (flags -la 2 
           --table 
           ; --trace 
           --external-tokens Tokens))
 
-(executable
- (name elmp)
+(library
+ (name oaklib)
  (flags :standard -rectypes)
  (libraries menhirLib core))
 

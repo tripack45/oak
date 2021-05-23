@@ -165,7 +165,7 @@ open Util
 %token <int>REQ_INDENT 
 %token <int>WTH_INDENT
 
-%start <Module.m> main
+%start <ElAst.Alias.Module.m> main
 
 %%
 

@@ -1,5 +1,5 @@
 
-
+open Oaklib
 let src = Src.Source.of_stdin ()
 
 (* module L = Lex.LayoutSensitiveLexer
@@ -26,8 +26,6 @@ let _ =
     print_endline "" *)
 
 (* module S = Sort *)
-
-open PhaseResolveSymbols
 
 module M = Core.Int.Map
 
