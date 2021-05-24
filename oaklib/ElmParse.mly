@@ -324,8 +324,8 @@ apat:
 
 // Identifiers 
 id:
-| VARID                                                                             { id_abstycon (con $1 $loc)         }
-| CONID                                                                             { id_var (var $1 $loc)              }
+| VARID                                                                             { id_var (var $1 $loc)         }
+| CONID                                                                             { id_abstycon (con $1 $loc)              }
 | CONID LPAREN DOTDOT RPAREN                                                        { id_tycon (con $1 $loc)            }
 
 var:

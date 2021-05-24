@@ -34,6 +34,7 @@ let () = print_endline "----- [Info] EL AST ----"
 let () = Parse.dump_with_layout @@ ElAst.ToString.m_to_string m
 let () = print_endline "----- [Phase] ResolveSymbols ----"
 let m = Pass.PhaseResolveSymbols.resolve ~modpath:None ~export_dict:[] m 
+let () = Parse.dump_with_layout @@ ElAstResolved.ToString.m_to_string m
 
 (* let () = 
     print_endline (String.make 20 '=');

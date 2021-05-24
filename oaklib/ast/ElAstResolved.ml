@@ -16,7 +16,7 @@ sig
   type id = M.t
   val fresh : ?id:id -> unit -> t
   val id : t -> M.t option
-
+  val to_cannonical_string : string -> t -> string
   val compare : t -> t -> int
 end =
 struct 
@@ -36,6 +36,8 @@ struct
       count := r + 1; 
       r
   let id t = Int.Map.find !map t
+
+  let to_cannonical_string prefix t = prefix ^ Int.to_string t
   let compare = Int.compare
 end
 
@@ -157,7 +159,7 @@ struct
     | Ids of ids
 
   type m = {
-    modid   : path node option;
+    modid   : path option;
     exports : ids;
     imports : (path * imported_exposed) list;
     (* TopLevel decls needs to keep track of field name because they are exported, 
@@ -169,5 +171,154 @@ end
 
 module ToString = 
 struct
+  open Printf
+  open Syntax
+  open Util.Format
+
+  open Core
+
+  let pos_to_string   = ElAst.ToString.pos_to_string
+  let op_to_string    = ElAst.ToString.op_to_string
+  let lit_to_string   = ElAst.ToString.lit_to_string
+  let field_to_string = ElAst.ToString.field_to_string
+
+  let path_to_string (path : path) = 
+    let open ElAst.Syntax in
+    let rec to_string p = 
+      match p with 
+      | Just con -> ElAst.ConId.to_string con
+      | More (con, p) -> ElAst.ConId.to_string con ^ "." ^ to_string p
+    in to_string (Node.elem path) 
+
+  let rec m_to_string ({ modid; exports; imports; tycons; vals } : m) =
+    let tycons_strings = 
+      assert (List.is_empty tycons); 
+      ["(* Unimplemented *)"] 
+    in
+    let vals_strings = 
+      List.map vals ~f:(
+        fun (ids, val_decl) ->
+          let ids_strs = 
+            List.map ids ~f:(
+              fun (id, var) -> 
+                "~" ^ VarId.to_string id ^ ":" ^ Var.to_cannonical_string "x" var
+            )
+            |> String.concat ~sep:", "
+            |> surround ("(", ")") in
+          sprintf "Val %s : %s" ids_strs (val_to_string val_decl)
+      )
+    in
+    sprintf ("let {%s} in %s : sig {%s} = struct {tycons {%s};vals {%s}}") 
+            (String.concat ~sep:";" @@ imports_to_strings imports)
+            (Core.Option.value_map modid ~default:"?" ~f:path_to_string)
+            (exports_to_string exports)
+            (String.concat ~sep:";" tycons_strings)
+            (String.concat ~sep:";" vals_strings)
+
+  and imports_to_strings imports = 
+    List.map imports ~f:(
+      fun (path, exposed) ->
+        let path_str = path_to_string path in
+        let sig_str = 
+          match exposed with 
+          | Unresolved -> "(..)"
+          | Ids {tycons; vals} -> 
+            let tycon_strs = List.map tycons ~f:(
+              function 
+              | (TyCon (id_node, dcons)) -> 
+                let id_str = TyConId.to_string (Node.elem id_node) in
+                let dcons_str = 
+                  match dcons with 
+                  | Unresolved -> ".."
+                  | Opaque -> ""
+                  | DCons dcons -> 
+                    concat_map ", " (fun id -> DConId.to_string @@ Node.elem id) dcons
+                in
+                sprintf "Tycon %s (%s)" id_str dcons_str
+              | Alias id_node -> "TyCon " ^  TyConId.to_string id_node
+            ) in
+            let vals = List.map vals ~f:(
+              fun varid_node -> "Val " ^ VarId.to_string @@ Node.elem varid_node
+            ) 
+            in String.concat ~sep:";" (tycon_strs @ vals)
+        in 
+        sprintf "%s : Opening {%s}" path_str sig_str
+    )
+
+  and exports_to_string {tycons; vals} =
+    assert (List.is_empty tycons);
+    assert (List.is_empty vals);
+    "(* Unimplemented *)"
+
+  and tycon_to_string _tycon : string = 
+    assert false
+
+  and val_to_string valbind : string = 
+    (* Annotations are not supported yet *)
+    match valbind with 
+    | Pat (annots, pat, e) -> 
+      assert (List.is_empty annots);
+      sprintf "%s = %s" (pat_to_string pat) (expr_to_string e)
+    | Fun (annot, (f, pats), e) -> 
+      assert (Option.is_none annot);
+      sprintf "Fun %s %s = %s" 
+              (Var.to_cannonical_string "x" (Node.elem f))
+              (concat_map " " pat_to_string pats)
+              (expr_to_string e)
+      
+  and pat_to_string (pat : pat) = 
+    match Node.elem pat with
+    | Var var      -> Var.to_cannonical_string "x" (Node.elem var)
+    | Any          -> "_"
+    | Unit         -> "()"
+    | EmptyList    -> "[]"
+    | Literal lit  -> lit_to_string lit
+    | List pats   -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
+    | Tuple pats  -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
+    | Con (con, pats) -> 
+      match pats with 
+      | [] -> dcon_to_string con
+      | _ -> sprintf "%s of %s" (dcon_to_string con)  (concat_map " " pat_to_string pats)
+
+  and expr_to_string (e : expr) =
+    let pp = expr_to_string in
+    match Node.elem e with
+    | Let ((tycons, vals), e)     -> 
+      let type_strings = List.map ~f:tycon_to_string tycons 
+                      |> List.map ~f:(fun s -> "TyCon " ^ s) in
+      let vals_strings = List.map ~f:val_to_string vals 
+                      |> List.map ~f:(fun s -> "Val " ^ s) in
+      sprintf "let {%s} in %s" 
+              (String.concat ~sep:";" (type_strings @ vals_strings)) 
+              (pp e) 
+    | Case (e, branches) -> 
+      let arrow (p, e) = pat_to_string p ^ " -> " ^ pp e in
+      sprintf "case %s of {%s}" (pp e) (concat_map "|" arrow branches)
+    | If (e1, (e2, e3))  -> sprintf "if %s then {%s} else {%s}" (pp e1) (pp e2) (pp e3)
+    | Lambda (pats, e)   -> sprintf "fn %s = {%s}" (concat_map " " pat_to_string pats) (pp e)
+    | App (e, es)        -> concat_map " " pp (e::es)
+    | Infix (op, e1, e2) -> sprintf "%s %s %s" (pp e1) (op_to_string op) (pp e2)
+    | OpFunc op          -> surround ("(", ")") (op_to_string op)
+    | Unit               -> "()"
+    | Tuple es           -> surround ("(", ")") @@ concat_map ", " pp es
+    | List es            -> surround ("[", "]") @@ concat_map ", " pp es
+    | Record field_es    -> 
+      let record_field (f, e) = field_to_string f ^ " = " ^ pp e in
+      surround ("<{", "}>") @@ (concat_map ";" record_field field_es)
+    | Con (con, es)      -> dcon_to_string con ^ concat_map " " pp es
+    | Var (var)          -> var_to_string var
+    | Literal lit        -> lit_to_string lit
+
+  and var_to_string (var : var node) = 
+    match Node.elem var with 
+    | BVar bvar -> Var.to_cannonical_string "x" (Node.elem bvar)
+    | FVar (Resolved (path, id)) -> path_to_string path ^ "." ^ VarId.to_string (Node.elem id)
+    | FVar (Unresolved id) -> "?." ^ VarId.to_string (Node.elem id)
+
+  and dcon_to_string con = 
+    match Node.elem con with 
+    | BDCon dconid -> DConId.to_string (Node.elem dconid)
+    | FDCon (Resolved (path, id)) -> path_to_string path ^ "." ^ DConId.to_string (Node.elem id)
+    | FDCon (Unresolved id) -> "?." ^ DConId.to_string (Node.elem id)
 
 end

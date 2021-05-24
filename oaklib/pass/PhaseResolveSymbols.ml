@@ -277,8 +277,6 @@ let rec translate_expr ((tctx, dctx, vctx) as ctx) dicts (expr : P.expr) : R.exp
  * scope impossible. As a corollary this allows us to collect type definitions and 
  * value defintions into two separate bins without needing to worry about accidental
  * captures.
- *
- * On the other hand, local definitions are up to alpha variance therefore
  *)
 and translate_decls (tctx, dctx, vctx) ((path_dict, dcon_map, fvar_map) as dicts) (decls : P.decl list) =
 

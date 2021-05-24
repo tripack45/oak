@@ -23,10 +23,10 @@ main =
 update msg model =
     case msg of
       Increment ->
-        (model + 1) + 2
+        (model + 1) + 2 + E.ConX
 
       Decrement ->
-        model - 1
+        model - 1 + E.ConY
 
 view model =
   div []
