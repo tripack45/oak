@@ -13,21 +13,21 @@ struct
             | (pos, Wrapped i) -> (pos', Wrapped (i + 1))
     in map_attr f par_node
 
-  let expr n pos : expr = naked n pos
-  let pat  n pos : pat  = node n pos
+  let expr n pos : expr' = naked n pos
+  let pat  n pos : pat'  = node n pos
 
   (* Identifiers *)
-  let var name pos  : var  = node (VarId.of_string name) pos
-  let con name pos  : con  = node (ConId.of_string name) pos
+  let var name pos  : var'  = node (VarId.of_string name) pos
+  let con name pos  : con'  = node (ConId.of_string name) pos
   
   let id_var var      : exposing_ident = Var var
   let id_tycon con    : exposing_ident = TyCon con
   let id_abstycon con : exposing_ident = AbsTyCon con
 
-  let field name pos : field = node (FieldId.of_string name) pos
+  let field name pos : field' = node (FieldId.of_string name) pos
 
-  let qvar (path, var) pos : qvar  = node (QVar (path, var)) pos
-  let qcon (path, con) pos : qcon  = node (QCon (path, con)) pos
+  let qvar (path, var) pos : qvar'  = node (QVar (path, var)) pos
+  let qcon (path, con) pos : qcon'  = node (QCon (path, con)) pos
 
    (* This funcstion does a few things 
     * - Break the string into tokens using lexer assuming some token pos
@@ -54,14 +54,14 @@ struct
       | (Tokens.CONID con)::cons -> More (ConId.of_string con, module_path cons)
       | _ -> assert false
 
-  let parse_modid (s : string) (pos : pos) : path =
+  let parse_modid (s : string) (pos : pos) : path' =
     let path =
       (Lex.LayoutSensitiveLexer.explode_qualified_name s (fst pos))
       |> Core.List.map ~f:fst
       |> module_path
     in node path pos
       
-  let parse_qvar (s : string) (pos : pos) : qvar = 
+  let parse_qvar (s : string) (pos : pos) : qvar' = 
     let (cons, poss, (id_tok, id_pos)) = parse_qualified s pos in
     let path_node = node (module_path cons) (List.hd poss, List.hd (List.rev poss)) in
     match id_tok with 
@@ -69,7 +69,7 @@ struct
       node (QVar (Some path_node, var varid id_pos)) pos
     | _ -> assert false
 
-  let parse_qcon (s : string) (pos : pos) : qcon = 
+  let parse_qcon (s : string) (pos : pos) : qcon' = 
     let (cons, poss, (id_tok, id_pos)) = parse_qualified s pos in
     let path_node = node (module_path cons) (List.hd poss, List.hd (List.rev poss)) in
     match id_tok with 
@@ -85,15 +85,15 @@ struct
   (* Intermediate values for atomic constructors 
   * This is needed because those constructors, though syntatically sharing the same node
   * can either serve as a value in an expresion, or an atomic pattern *)
-  type gcon = | Unit | EmptyList | QCon of qcon
+  type gcon = | Unit | EmptyList | QCon of qcon'
 
-  let gcon2pat g : _pat =
+  let gcon2pat g : pat =
     match g with 
     | QCon c    -> Ctor (c, [])
     | Unit      -> Unit
     | EmptyList -> EmptyList
 
-  let gcon2expr g : _expr =
+  let gcon2expr g : expr =
     match g with 
     | Unit       -> Unit
     | EmptyList  -> List []

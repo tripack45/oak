@@ -41,13 +41,8 @@ module Set = Core.Set.Poly
 
 module ConId = ElAst.ConId
 
-let as_resolved_node node = 
-  let (elem, attr) = Node.both node in
-  Node.node elem (Some attr)
-
-let map_to_resolved f pnode =
-  let (elem, attr) = Node.both pnode in
-  Node.node (f elem) (Some attr)
+let as_resolved_path (path : P.path') : R.path' =
+  Node.map_attr Option.some path
 
 let as_dconid conid = DConId.of_string (ConId.to_string conid)
 let as_tyconid conid = TyConId.of_string (ConId.to_string conid)
@@ -61,10 +56,10 @@ let as_tyconid conid = TyConId.of_string (ConId.to_string conid)
  * In this example uses of Con can either be ModuleX.Con or ModuleY.Con, depending
  * whether Con is being used as a TyCon or a DCon
  *)
-type path_dict = (P._path, R._path) Map.t
-type tycon_map = (TyConId.t, R._path) Map.t
-type dcon_map  = (DConId.t, R._path) Map.t
-type fvar_map  = (VarId.t, R._path) Map.t
+type path_dict = (P.path, R.path) Map.t
+type tycon_map = (TyConId.t, R.path) Map.t
+type dcon_map  = (DConId.t, R.path) Map.t
+type fvar_map  = (VarId.t, R.path) Map.t
 type dicts = path_dict * tycon_map * dcon_map * fvar_map
 
 (* tctx : Type Constructor Context
@@ -161,21 +156,21 @@ let exposing_to_sigmask ~default (exposing_opt : P.exposing option) : R.sigmask 
         | P.AbsTyCon con 
         | P.TyCon con ->    
           let tycon : R.Sig.sigmask_tycon = 
-            R.Sig.Enumerated (map_to_resolved as_tyconid con, []) 
+            R.Sig.Enumerated (Node.map_elem as_tyconid con, []) 
           in Some tycon
         | P.Var _ -> None
       in
       let fvar exposed_var =
         match exposed_var with 
         | P.AbsTyCon _ | P.TyCon _  -> None
-        | P.Var v -> Some (as_resolved_node v)
+        | P.Var v -> Some v
       in
       let tycons = List.filter_map ids ~f:fcon
       and vals   = List.filter_map ids ~f:fvar in
       R.Sig.Enumerated (tycons, vals)
 
 
-let resolve_imports ~export_dict (imports : P.import list) : path_dict * (R.path * R.sigmask) list =
+let resolve_imports ~export_dict (imports : P.import list) : path_dict * (R.path' * R.sigmask) list =
   let f (path_map : path_dict) (P.Import (path, as_con_opt, exposing_opt)) = 
     let path_map' = 
       match as_con_opt with
@@ -184,7 +179,7 @@ let resolve_imports ~export_dict (imports : P.import list) : path_dict * (R.path
         let as_path = P.Just (Node.elem con) in
         Map.add_exn path_map ~key:as_path ~data:(Node.elem path)
     in
-    (path_map', (as_resolved_node path, exposing_to_sigmask ~default:sigmask_none exposing_opt))
+    (path_map', (as_resolved_path path, exposing_to_sigmask ~default:sigmask_none exposing_opt))
   in
   List.fold_map imports ~init:Map.empty ~f:f
 
@@ -208,8 +203,7 @@ let sigt_to_dicst (tycon_map, dcon_map, fvar_map) (path, sigt)  =
   in
   (tycon_map', dcon_map', fvar_map')
 
-
-let imports_to_maps (imports : (R.path * R.sigmask) list) =
+let imports_to_maps (imports : (R.path' * R.sigmask) list) =
   let f dicts (path, sigmask) = 
     (* If whole program is available, this step would be replaced by looking up signature of other modules
      * then apply the signature mask to those signatures *)
@@ -218,7 +212,7 @@ let imports_to_maps (imports : (R.path * R.sigmask) list) =
   in
   List.fold imports ~init:(Map.empty, Map.empty, Map.empty) ~f
 
-let resolve_var ((path_map, _, _, fvar_map): dicts) (vctx : vctx) (qvar : P.qvar) =
+let resolve_var ((path_map, _, _, fvar_map): dicts) (vctx : vctx) (qvar : P.qvar') =
   let (P.QVar (path_opt, var)) = Node.elem qvar in
   match path_opt with 
   | Some path -> 
@@ -229,22 +223,22 @@ let resolve_var ((path_map, _, _, fvar_map): dicts) (vctx : vctx) (qvar : P.qvar
               |> Option.value ~default:(Node.elem path)
     in
     let path_node' = Node.node path' (Some (Node.attr path)) in
-    let fvar = R.FVar (R.Resolved (path_node', as_resolved_node var)) in
-    Node.node fvar (Some (Node.attr qvar))
+    let fvar = R.FVar (R.Resolved (path_node', var)) in
+    Node.node fvar (Node.attr qvar)
   | None -> 
     match Map.find vctx (Node.elem var) with 
     | Some bvar -> 
-      let var' = R.BVar (Node.node bvar (Some (Node.attr var))) in
-      Node.node var' (Some (Node.attr qvar))
+      let var' = R.BVar (Node.node bvar (Node.attr var)) in
+      Node.node var' (Node.attr qvar)
     | None ->
       match Map.find fvar_map (Node.elem var) with
       | Some path' -> 
         let path_node' = Node.node path' None in
-        let fvar = R.FVar (R.Resolved (path_node', as_resolved_node var)) in
-        Node.node fvar (Some (Node.attr qvar))
+        let fvar = R.FVar (R.Resolved (path_node', var)) in
+        Node.node fvar (Node.attr qvar)
       | None -> 
-        let fvar = R.FVar (R.Unresolved (as_resolved_node var)) in
-        Node.node fvar (Some (Node.attr qvar))
+        let fvar = R.FVar (R.Unresolved var) in
+        Node.node fvar (Node.attr qvar)
 
 let resolve_dcon ((path_map, _, dcon_map, _) : dicts) (dctx : dctx) qcon =
   let (P.QCon (path_opt, con)) = Node.elem qcon in
@@ -252,35 +246,35 @@ let resolve_dcon ((path_map, _, dcon_map, _) : dicts) (dctx : dctx) qcon =
   | Some path -> 
     let path' = Map.find_exn path_map (Node.elem path) in
     let path_node' = Node.node path' (Some (Node.attr path)) in
-    let fcon = R.FDCon (R.Resolved (path_node', map_to_resolved as_dconid con)) in
-    Node.node fcon (Some (Node.attr qcon))
+    let fcon = R.FDCon (R.Resolved (path_node', Node.map_elem as_dconid con)) in
+    Node.node fcon (Node.attr qcon)
   | None -> 
     if Set.mem dctx (as_dconid @@ Node.elem con) then
-      let con' = R.BDCon (map_to_resolved as_dconid con) in
-      Node.node con' (Some (Node.attr qcon))
+      let con' = R.BDCon (Node.map_elem as_dconid con) in
+      Node.node con' (Node.attr qcon)
     else
       match Map.find dcon_map (as_dconid @@ Node.elem con) with
       | Some path' -> 
         let path_node' = Node.node path' None in
-        let fdcon = R.FDCon (R.Resolved (path_node', map_to_resolved as_dconid con)) in
-        Node.node fdcon (Some (Node.attr qcon))
+        let fdcon = R.FDCon (R.Resolved (path_node', Node.map_elem as_dconid con)) in
+        Node.node fdcon (Node.attr qcon)
       | None -> 
-        let fdcon = R.FDCon (R.Unresolved (map_to_resolved as_dconid con)) in
-        Node.node fdcon (Some (Node.attr qcon))
+        let fdcon = R.FDCon (R.Unresolved (Node.map_elem as_dconid con)) in
+        Node.node fdcon (Node.attr qcon)
 
 (* Parser does not support parsing tycons yet *)
 let resolve_tycon ((path_map, tycon_map, _, _) : dicts) (tctx : tctx) qcon =
   assert false
 
-let rec collect_binders_node (pat : P.pat) : (VarId.t R.node) list =
+let rec collect_binders_node (pat : P.pat') : (VarId.t R.node) list =
   match Node.elem pat with 
   | P.Any | P.Unit | P.EmptyList | P.Literal _ -> []
   | P.List pats  -> List.concat (List.map pats ~f:collect_binders_node)
   | P.Tuple pats -> List.concat (List.map pats ~f:collect_binders_node)
   | P.Ctor (_, pats) -> List.concat (List.map pats ~f:collect_binders_node)
-  | P.Var v -> [as_resolved_node v]
+  | P.Var v -> [v]
 
-let collect_binders (pat : P.pat) : VarId.t list =
+let collect_binders (pat : P.pat') : VarId.t list =
   collect_binders_node pat |> List.map ~f:Node.elem
 
 let bind_binders vctx varids =
@@ -291,9 +285,9 @@ let bind_binders vctx varids =
       (vctx', (varid, bvar))
   )
 
-let rec translate_pat ((_tctx, dctx, vctx) as ctx) (dicts : dicts) (pat : P.pat) : R.pat =
+let rec translate_pat ((_tctx, dctx, vctx) as ctx) (dicts : dicts) (pat : P.pat') =
   let (elem, pos) = Node.both pat in
-  let pat_node (pat : R._pat) = Node.node pat (Some pos) in
+  let pat_node (pat : R.pat) = Node.node pat pos in
   let tr = translate_pat ctx dicts in
   match elem with 
   | P.Any         -> pat_node R.Any
@@ -308,9 +302,9 @@ let rec translate_pat ((_tctx, dctx, vctx) as ctx) (dicts : dicts) (pat : P.pat)
   | P.Var v -> 
     let (id, pos) = Node.both v in
     let var : Var.t = Map.find_exn vctx id in
-    pat_node @@ R.Var (Node.node var (Some pos))
+    pat_node @@ R.Var (Node.node var pos)
 
-let rec translate_expr ((tctx, dctx, vctx) as ctx) dicts (expr : P.expr) : R.expr = 
+let rec translate_expr ((tctx, dctx, vctx) as ctx) dicts (expr : P.expr') = 
   let tr e = translate_expr ctx dicts e in
   let tr_vctx vctx' e = translate_expr (tctx, dctx, vctx') dicts e in
   let (expr, (pos, _)) = Node.both expr in
@@ -351,7 +345,7 @@ let rec translate_expr ((tctx, dctx, vctx) as ctx) dicts (expr : P.expr) : R.exp
       let es' = List.map es ~f:tr in
       R.Con (con', es')
   in
-  Node.node expr' (Some pos)
+  Node.node expr' pos
 
 (* Declarations in Elm presents a wide range of semantics issues that needs to be
  * carefully taken care of.contents
@@ -371,18 +365,18 @@ let rec translate_expr ((tctx, dctx, vctx) as ctx) dicts (expr : P.expr) : R.exp
  * value defintions into two separate bins without needing to worry about accidental
  * captures.
  *)
-and translate_decls (tctx, dctx, vctx) ((path_dict, tycon_map, dcon_map, fvar_map) as dicts) (decls : P.decl list) =
+and translate_decls (tctx, dctx, vctx) ((path_dict, tycon_map, dcon_map, fvar_map) as dicts) decls =
 
   let extract_tycons decls = 
     List.filter_map decls ~f:(
-      fun decl ->
+      fun (decl : P.decl') ->
         match Node.elem decl with 
         | P.TyCon -> assert false 
         | _ -> None
     )
   in
   
-  let translate_tycons (tctx, dctx) tycons : tctx * dctx * (((TyConId.t * TyCon.t) * R.typdecl) list) =
+  let translate_tycons (tctx, dctx) tycons =
     let ((tctx', dctx'), tycons') = 
       List.fold_map tycons ~init:(tctx, dctx) ~f:(
         fun (tctx, dctx) tycon -> 
@@ -397,7 +391,7 @@ and translate_decls (tctx, dctx, vctx) ((path_dict, tycon_map, dcon_map, fvar_ma
    * - The contexts for expression under the declared scope 
    * - The translated declarations
    *)
-  let translate_vals (tctx, dctx, vctx) (decls : P.decl list) = 
+  let translate_vals (tctx, dctx, vctx) decls = 
     (* Extract a context and a list of varid-binder pairs from decls 
      * Right now the list is not that useful though *)
     let (vctx', _) = 
@@ -420,7 +414,7 @@ and translate_decls (tctx, dctx, vctx) ((path_dict, tycon_map, dcon_map, fvar_ma
         let e'    = translate_expr (tctx, dctx, vctx') dicts e in
         let (fid, pos) = Node.both var_node in
         let fbind = Map.find_exn vctx fid in 
-        let decl' = R.Fun (None, ((Node.node fbind (Some pos)), pats'), e') in
+        let decl' = R.Fun (None, ((Node.node fbind pos), pats'), e') in
         Some ([(fid, fbind)], decl')
       | P.Pat (pat, e) -> 
         (* The input has already binded pat *)
@@ -445,7 +439,7 @@ and translate_decls (tctx, dctx, vctx) ((path_dict, tycon_map, dcon_map, fvar_ma
    * does not support it for now. *)
   ((tctx', dctx', vctx'), (tycons', decls'))
 
-let infersig_from_decls (decls : P.decl list) = 
+let infersig_from_decls (decls : P.decl' list) = 
   let (sig_tycons, sig_vals) = 
     List.fold_right decls ~init:([], []) ~f:(
       fun decl (sig_tycons, sig_vals) -> 
@@ -453,7 +447,7 @@ let infersig_from_decls (decls : P.decl list) =
         | TyCon -> assert false
         | Annot _ -> (sig_tycons, sig_vals)
         | P.Pat (pat, _) -> (sig_tycons, collect_binders_node pat @ sig_vals)
-        | P.Fun ((var, _), _) -> (sig_tycons, as_resolved_node var::sig_vals)
+        | P.Fun ((var, _), _) -> (sig_tycons, var::sig_vals)
     )
   in R.Sig.Sig (sig_tycons, sig_vals)
 

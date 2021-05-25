@@ -58,52 +58,57 @@ struct
   type pos = Lexing.position * Lexing.position
 
   (* A regular AST node encodes source file location *)
-  type 'a node     = ('a, pos option) Node.t
+  type 'a node     = ('a, pos) Node.t
 
-  type bvar   = Var.t node
-  type bdcon  = DConId.t node
-  type btycon = TyCon.t node
+  type bvar   = Var.t
+  type bdcon  = DConId.t
+  type btycon = TyCon.t
+  type field  = ElAst.Syntax.field
+  type lit    = ElAst.Syntax.lit
+  type path   = ElAst.Syntax.path
 
-  type _lit   = ElAst.Syntax._lit
-  type _path  = ElAst.Syntax._path
-
-  type field = ElAst.Syntax.field
-  type lit   = ElAst.Syntax.lit
-  type path  = _path node
+  type bvar'   = Var.t node 
+  type bdcon'  = DConId.t node
+  type btycon' = TyCon.t node
+  type field'  = field node
+  type lit'    = lit node
+  type path'   = (path, pos option) Node.t
 
   type 'id free = 
-     | Resolved   of path * 'id
+     | Resolved   of path' * 'id
      | Unresolved of 'id
 
   type fvar = (VarId.t node) free
   type var = 
-     | BVar of bvar
+     | BVar of bvar'
      | FVar of fvar
 
   type fdcon = (DConId.t node) free
   type dcon = 
-     | BDCon of bdcon
+     | BDCon of bdcon'
      | FDCon of fdcon
 
   type ftycon = (DConId.t node) free
   type tycon = 
-     | BTyCon of btycon
+     | BTyCon of btycon'
      | FTyCon of ftycon
 
-  type _pat = 
-    | Var        of bvar
+  type pat = 
+    | Var        of bvar'
     | Any
     | Unit 
     | EmptyList
-    | Literal    of lit
-    | List       of pat list
-    | Tuple      of pat list
-    | Con        of dcon node * (pat list)
-  and pat = _pat node
+    | Literal    of lit'
+    | List       of pat node list
+    | Tuple      of pat node list
+    | Con        of dcon node * (pat node list)
+
+  type pat' = pat node
 
   (* TODO: implement TyCon resolution *)
-  type typ = ElAst.Syntax.typ
-  type op  = ElAst.Syntax.op
+  type typ  = ElAst.Syntax.typ
+  type typ' = ElAst.Syntax.typ node
+  type op   = ElAst.Syntax.op
 
   type annot = var node * typ node 
 
@@ -111,32 +116,33 @@ struct
     | TyCon
     | Alias
 
-  type _expr = 
+  type expr = 
     (* Control flow constructs *)
-    | Let        of (typdecl list * decl list) * expr 
-    | Case       of expr * ((pat * expr) list)
-    | If         of expr * (expr * expr)
-    | Lambda     of pat list * expr
-    | App        of expr * (expr list)
+    | Let        of (typdecl list * decl list) * expr'
+    | Case       of expr' * ((pat' * expr') list)
+    | If         of expr' * (expr' * expr')
+    | Lambda     of pat' list * expr'
+    | App        of expr' * (expr' list)
     (* Operators *)
-    | Infix      of op * expr * expr
+    | Infix      of op * expr' * expr'
     | OpFunc     of op
     (* Builtin Types *)
     | Unit
-    | Tuple      of expr list  (* >= 2 elements *)
-    | List       of expr list  (* >= 0 elements *)
-    | Record     of (field * expr) list
+    | Tuple      of expr' list  (* >= 2 elements *)
+    | List       of expr' list  (* >= 0 elements *)
+    | Record     of (field' * expr') list
     (* Data construction *)
-    | Con        of dcon node * (expr list)
+    | Con        of dcon node * (expr' list)
     (* Identifier refernce *)
     | Var        of var node
     (* Literals *)
-    | Literal    of lit
-  and expr = _expr node
+    | Literal    of lit'
+
+  and expr' = expr node
 
   and decl =
-    | Pat   of annot list * pat * expr
-    | Fun   of annot option * (bvar * (pat list)) * expr
+    | Pat   of annot list * pat' * expr'
+    | Fun   of annot option * (bvar' * (pat' list)) * expr'
 
   (* This module introduces "signature" ("sigt") and "signature mask" ("sigmask") 
    * 
@@ -174,9 +180,9 @@ struct
   type sigmask = Sig.mask
 
   type m = {
-    modid   : path option;
+    modid   : path' option;
     exports : sigt;
-    imports : (path * sigmask) list;
+    imports : (path' * sigmask) list;
     (* TopLevel decls needs to keep track of field name because they are exported, 
      * In particular, a single val definition can export multiple names *)
     tycons  : ((TyConId.t * TyCon.t) * typdecl) list;
@@ -197,7 +203,7 @@ struct
   let lit_to_string   = ElAst.ToString.lit_to_string
   let field_to_string = ElAst.ToString.field_to_string
 
-  let path_to_string (path : path) = 
+  let path_to_string path = 
     let open ElAst.Syntax in
     let rec to_string p = 
       match p with 
@@ -285,21 +291,21 @@ struct
               (concat_map " " pat_to_string pats)
               (expr_to_string e)
       
-  and pat_to_string (pat : pat) = 
+  and pat_to_string (pat : pat') = 
     match Node.elem pat with
     | Var var      -> Var.to_cannonical_string "x" (Node.elem var)
     | Any          -> "_"
     | Unit         -> "()"
     | EmptyList    -> "[]"
     | Literal lit  -> lit_to_string lit
-    | List pats   -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
-    | Tuple pats  -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
+    | List pats    -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
+    | Tuple pats   -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
     | Con (con, pats) -> 
       match pats with 
       | [] -> dcon_to_string con
       | _ -> sprintf "%s of %s" (dcon_to_string con)  (concat_map " " pat_to_string pats)
 
-  and expr_to_string (e : expr) =
+  and expr_to_string (e : expr') =
     let pp = expr_to_string in
     match Node.elem e with
     | Let ((tycons, vals), e)     -> 

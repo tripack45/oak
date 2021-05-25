@@ -78,103 +78,105 @@ struct
 
   type 'a par_node = ('a, pos * paren) Node.t
 
-  type var = VarId.t node
+  type var = VarId.t
+  type var' = var node
 
-  type con = ConId.t node
+  type con = ConId.t
+  type con' = con node
 
-  type exposing_ident =
-    | AbsTyCon of con
-    | TyCon    of con
-    | Var      of var
+  type field = FieldId.t
+  type field' = field node
 
-  type field = FieldId.t node
-
-  type _lit = 
+  type lit = 
     | Int    of string
     | Float  of string
     | String of string
-  and lit = _lit node
+  type lit' = lit node
 
-  type _path =
+  type path =
     | Just of ConId.t
-    | More of ConId.t * _path
-  and path = _path node
+    | More of ConId.t * path
+  type path' = path node
 
-  type _qvar = 
-    QVar of path option * var
-  and qvar = _qvar node
+  type qvar = QVar of path' option * var'
+  type qvar' = qvar node
 
-  type _qcon =
-    QCon of path option * con
-  and qcon = _qcon node
+  type qcon = QCon of path' option * con'
+  type qcon' = qcon node
 
-  type _pat = 
-    | Var        of var
+  type pat = 
+    | Var        of var'
     | Any
     | Unit 
     | EmptyList
-    | Literal    of lit
-    | List       of pat list
-    | Tuple      of pat list
-    | Ctor       of qcon * (pat list)
-  and pat = _pat node
+    | Literal    of lit'
+    | List       of (pat node) list
+    | Tuple      of (pat node) list
+    | Ctor       of qcon' * (pat node list)
+  type pat' = pat node
 
-  type _typ = 
+  type typ = 
     | Unit
-    | Tuple of typ list
-  and typ = _typ node
+    | Tuple of typ node list
+  and typ' = typ node
 
-  (* decl depends on the yet provided definition of type expr *)
-  type _decl =
-    | TyCon 
-    | Annot of var * typ
-    | Pat   of pat * expr
-    | Fun   of (var * (pat list)) * expr
-  and decl = _decl node
-
-  and op =
+  type op =
     | PLUS  | MINUS
     | TIMES | DIV
     | EQ
     | GT    | GEQ
     | LT    | LEQ
 
-  and _expr = 
+  (* decl depends on the yet provided definition of type expr *)
+  type decl =
+    | TyCon 
+    | Annot of var' * typ'
+    | Pat   of pat' * expr'
+    | Fun   of (var' * (pat' list)) * expr'
+
+  and expr = 
     (* Control flow constructs *)
-    | Let        of decl list * expr 
-    | Case       of expr * ((pat * expr) list)
-    | If         of expr * (expr * expr)
-    | Lambda     of pat list * expr
-    | App        of expr * (expr list)
+    | Let        of decl' list * expr'
+    | Case       of expr' * ((pat' * expr') list)
+    | If         of expr' * (expr' * expr')
+    | Lambda     of pat' list * expr'
+    | App        of expr' * (expr' list)
     (* Operators *)
-    | Infix      of op * expr * expr
+    | Infix      of op * expr' * expr'
     | OpFunc     of op
     (* Builtin Types *)
     | Unit
-    | Tuple      of expr list  (* >= 2 elements *)
-    | List       of expr list  (* >= 0 elements *)
-    | Record     of (field * expr) list
+    | Tuple      of expr' list  (* >= 2 elements *)
+    | List       of expr' list  (* >= 0 elements *)
+    | Record     of (field' * expr') list
     (* Data construction *)
-    | Con        of qcon * (expr list)
+    | Con        of qcon' * (expr' list)
     (* Identifier refernce *)
-    | Var        of qvar
+    | Var        of qvar'
     (* Literals *)
-    | Literal    of lit
-  and expr = _expr par_node
+    | Literal    of lit'
+
+  and decl' = decl node
+  and expr' = expr par_node
+
+  type exposing_ident =
+    | AbsTyCon of con'
+    | TyCon    of con'
+    | Var      of var'
 
   type exposing =
     | Any
     | Idents of exposing_ident list
 
   type mdecl = 
-    | MDecl of con * exposing option
+    | MDecl of con' * exposing option
 
   type import = 
-    | Import of path * con option * exposing option
+    | Import of path' * con' option * exposing option
 
   (* The whole module *)
   type m = 
-    | Mod of mdecl option * (import list) * (decl list)
+    | Mod of mdecl option * (import list) * (decl' list)
 end
 
 (* This module copies over type definitions listed above and places them into 
@@ -186,27 +188,27 @@ struct
 
   module Literal = 
   struct
-    type _lit = Syntax._lit =
+    type lit = Syntax.lit =
       | Int    of string
       | Float  of string
       | String of string
 
-    type lit = Syntax.lit
+    type lit' = Syntax.lit'
   end
 
   module Pattern =
   struct
-    type _pat = Syntax._pat =
-      | Var        of var
+    type pat = Syntax.pat =
+      | Var        of var'
       | Any
       | Unit 
       | EmptyList
-      | Literal    of lit
-      | List       of pat list
-      | Tuple      of pat list
-      | Ctor       of qcon * (pat list)
+      | Literal    of lit'
+      | List       of pat' list
+      | Tuple      of pat' list
+      | Ctor       of qcon' * (pat' list)
 
-    type pat = Syntax.pat
+    type pat' = Syntax.pat'
   end
 
   module Expr =
@@ -218,49 +220,49 @@ struct
       | GT    | GEQ
       | LT    | LEQ
 
-    type _expr = Syntax._expr =
+    type expr = Syntax.expr =
       (* Control flow constructs *)
-      | Let        of decl list * expr 
-      | Case       of expr * ((pat * expr) list)
-      | If         of expr * (expr * expr)
-      | Lambda     of pat list * expr
-      | App        of expr * (expr list) 
+      | Let        of decl' list * expr'
+      | Case       of expr' * ((pat' * expr') list)
+      | If         of expr' * (expr' * expr')
+      | Lambda     of pat' list * expr'
+      | App        of expr' * (expr' list) 
       (* Operators *)
-      | Infix      of op * expr * expr
+      | Infix      of op * expr' * expr'
       | OpFunc     of op
       (* Builtin Types *)
       | Unit
-      | Tuple      of expr list  (* >= 2 elements *)
-      | List       of expr list  (* >= 0 elements *)
-      | Record     of (field * expr) list
+      | Tuple      of expr' list  (* >= 2 elements *)
+      | List       of expr' list  (* >= 0 elements *)
+      | Record     of (field' * expr') list
       (* Data construction *)
-      | Con        of qcon * (expr list)
+      | Con        of qcon' * (expr' list)
       (* Identifier refernce *)
-      | Var        of qvar
+      | Var        of qvar'
       (* Literals *)
-      | Literal    of lit
+      | Literal    of lit'
     
-    type expr = Syntax.expr
+    type expr' = Syntax.expr'
   end
 
   module Typ = 
   struct
-    type _typ = Syntax._typ =
+    type typ = Syntax.typ =
       | Unit
-      | Tuple of typ list
+      | Tuple of typ' list
 
-    and typ = Syntax.typ
+    and typ' = Syntax.typ'
   end
 
   module Decl = 
   struct
-    type _decl = Syntax._decl = 
+    type decl = Syntax.decl = 
       | TyCon 
-      | Annot of var * typ
-      | Pat   of pat * expr
-      | Fun   of (var * (pat list)) * expr
+      | Annot of var' * typ'
+      | Pat   of pat' * expr'
+      | Fun   of (var' * (pat' list)) * expr'
 
-    and decl = Syntax.decl
+    type decl' = Syntax.decl'
   end
 
   module Module =
@@ -270,13 +272,13 @@ struct
       | Idents of exposing_ident list
 
     type mdecl = Syntax.mdecl =
-      | MDecl of con * exposing option
+      | MDecl of con' * exposing option
 
     type import = Syntax.import =
-      | Import of path * con option * exposing option
+      | Import of path' * con' option * exposing option
 
     type m = Syntax.m =
-      | Mod of mdecl option * (import list) * (decl list)
+      | Mod of mdecl option * (import list) * (decl' list)
   end
 end
 
@@ -395,7 +397,7 @@ struct
         let record_field (f, e) = field_to_string f ^ " = " ^ pp e in
         surround ("<{", "}>") @@ (concat_map ";" record_field field_es)
       | Con (qcon, es)     -> qcon_to_string qcon ^ concat_map " " pp es
-      | Var (qvar:qvar)    -> qvar_to_string qvar
+      | Var qvar           -> qvar_to_string qvar
       | Literal lit        -> lit_to_string lit
     in 
     match snd (Node.attr e) with
@@ -420,7 +422,7 @@ struct
     | Some path_str -> path_str ^ "." ^ var_to_string var
     | None -> var_to_string var
 
-  and path_to_string (path : path) : string = 
+  and path_to_string path : string = 
     let rec to_string p = 
       match p with 
       | Just con -> ConId.to_string con
