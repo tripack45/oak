@@ -126,6 +126,7 @@ let apply_sigmask (sigmask : R.sigmask) (sigt : R.sigt) : R.sigt =
 let sig_empty : R.sigt = R.Sig.Sig ([], [])
 
 let sigmask_any : R.sigmask = R.Sig.Any
+let sigmask_none : R.sigmask = R.Sig.Enumerated ([], [])
 
 (* Obtain a minimum signature that satisfies the sigmask *)
 let sigmask_minimum_sig (sigmask : R.sigmask) : R.sigt = 
@@ -141,14 +142,18 @@ let sigmask_minimum_sig (sigmask : R.sigmask) : R.sigt =
     R.Sig.Sig (tycons, vals)
 
 
-(* Missing an exposing clause means it the mask accepts all signatures 
- * This makes sense for import statement but arguably makes much less sense for module decl
+(* Missing an exposing clause have different semantics depending where the exposing clause exists:
+ *
+ * - For mdecl  , missing "exposing" is equivalent to "exposing (..)"
+ * - For imports, missing "exposing" is equivalent ot "exposing ()"
+ * 
+ * This deisgn makes sense for import statement but arguably makes much less sense for module decl
  * Without exposing statement a better design would be treating it as exposing nothing 
  * instead of everything, especially because we have an explicit exposing(..) for doing it.
  *)
-let exposing_to_sigmask (exposing_opt : P.exposing option) : R.sigmask = 
+let exposing_to_sigmask ~default (exposing_opt : P.exposing option) : R.sigmask = 
   match exposing_opt with
-  | None -> R.Sig.Any
+  | None -> default
   | Some exposing -> 
     match exposing with 
     | P.Any -> sigmask_any
@@ -180,36 +185,37 @@ let resolve_imports ~export_dict (imports : P.import list) : path_dict * (R.path
         let as_path = P.Just (Node.elem con) in
         Map.add_exn path_map ~key:as_path ~data:(Node.elem path)
     in
-    (path_map', (as_resolved_node path, exposing_to_sigmask exposing_opt))
+    (path_map', (as_resolved_node path, exposing_to_sigmask ~default:sigmask_none exposing_opt))
   in
   List.fold_map imports ~init:Map.empty ~f:f
 
+let sigt_to_dicst (tycon_map, dcon_map, fvar_map) (path, sigt)  =
+  let (R.Sig.Sig (tycons, dcons)) = sigt in
+  let (tycon_map', dcon_map') = 
+    List.fold tycons ~init:(tycon_map, dcon_map) ~f:(
+      fun (tycon_map, dcon_map) (conid, dcons) -> 
+        let tycon_map' = Map.add_exn tycon_map ~key:(Node.elem conid) ~data:(Node.elem path) in
+        let dcon_map' = 
+          List.fold dcons ~init:dcon_map ~f:(
+            fun (map : dcon_map) conid -> 
+              Map.add_exn map ~key:(Node.elem conid) ~data:(Node.elem path)
+          )
+        in (tycon_map', dcon_map')
+      )
+  in 
+  let fvar_map' = List.fold dcons ~init:fvar_map ~f:(
+    fun map var -> Map.add_exn map ~key:(Node.elem var) ~data:(Node.elem path)
+  )
+  in
+  (tycon_map', dcon_map', fvar_map')
+
+
 let imports_to_maps (imports : (R.path * R.sigmask) list) =
-  let f ((tycon_map, dcon_map, fvar_map) as maps) (path, sigmask) =
-    match sigmask with 
-    | R.Sig.Any -> maps
-    | R.Sig.Enumerated (tycons, vals) -> 
-      let (tycon_map', dcon_map') = List.fold tycons ~init:(tycon_map, dcon_map) ~f:(
-        fun (tycon_map, dcon_map) (tycon : R.Sig.sigmask_tycon) -> 
-          match tycon with 
-          | R.Sig.Any conid -> 
-            let tycon_map' = Map.add_exn tycon_map ~key:(Node.elem conid) ~data:(Node.elem path) in
-            (tycon_map', dcon_map)
-          | R.Sig.Enumerated (conid, dcons) -> 
-            let tycon_map' = Map.add_exn tycon_map ~key:(Node.elem conid) ~data:(Node.elem path) in
-            let dcon_map' = 
-              List.fold dcons ~init:dcon_map ~f:(
-                fun (map : dcon_map) conid -> 
-                  Map.add_exn map ~key:(Node.elem conid) ~data:(Node.elem path)
-              )
-            in (tycon_map', dcon_map')
-      )
-      in 
-      let fvar_map' = List.fold vals ~init:fvar_map ~f:(
-        fun map var -> Map.add_exn map ~key:(Node.elem var) ~data:(Node.elem path)
-      )
-      in
-      (tycon_map', dcon_map', fvar_map')
+  let f dicts (path, sigmask) = 
+    (* If whole program is available, this step would be replaced by looking up signature of other modules
+     * then apply the signature mask to those signatures *)
+    let sigt = sigmask_minimum_sig sigmask in
+    sigt_to_dicst dicts (path, sigt)
   in
   List.fold imports ~init:(Map.empty, Map.empty, Map.empty) ~f
 
@@ -462,7 +468,7 @@ let resolve ~modpath ~export_dict (t : P.m) : R.m =
   let m_sigmask = 
     match mdecl with 
     | None -> sigmask_any
-    | Some (P.MDecl (_, exposing_opt)) -> exposing_to_sigmask exposing_opt
+    | Some (P.MDecl (_, exposing_opt)) -> exposing_to_sigmask ~default:sigmask_any exposing_opt
   in
   (* Now we filter the organized tycons and values with the module export spec
    * to generate the list of exported identifiers. *)
