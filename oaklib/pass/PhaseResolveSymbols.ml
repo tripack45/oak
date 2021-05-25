@@ -54,10 +54,20 @@ let as_tyconid con =
   Node.node (TyConId.of_string (ConId.to_string elem)) (Some attr)
 
 
+(* TyCons and DCons must use separate map because they live in different 
+ * namespaces, hence name collisions between them would be bad. Consider this:
+ * 
+ * import ModuleX exposing ( Con(..) )
+ * import ModuleY exposing ( TyCon(Con) )
+ *
+ * In this example uses of Con can either be ModuleX.Con or ModuleY.Con, depending
+ * whether Con is being used as a TyCon or a DCon
+ *)
 type path_dict = (P._path, R._path) Map.t
+type tycon_map = (TyConId.t, R._path) Map.t
 type dcon_map  = (DConId.t, R._path) Map.t
 type fvar_map  = (VarId.t, R._path) Map.t
-type dicts = path_dict * dcon_map * fvar_map
+type dicts = path_dict * tycon_map * dcon_map * fvar_map
 
 (* tctx : Type Constructor Context
  * dctx : Data Constructor Context
@@ -74,7 +84,94 @@ type tctx = (TyConId.t, TyCon.t) Map.t
 type dctx = (DConId.t) Set.t
 type vctx = (VarId.t, Var.t) Map.t
 
-let resolve_imports ~export_dict (imports : P.import list) : path_dict * (R.path * R.imported_exposed) list =
+(* Applies a sigmask to a signature *)
+let apply_sigmask (sigmask : R.sigmask) (sigt : R.sigt) : R.sigt =
+  match sigmask with 
+  | R.Sig.Any -> sigt
+  | R.Sig.Enumerated (mask_tycons, mask_vals) ->
+    let (R.Sig.Sig (sig_tycons, sig_vals)) = sigt in
+    (* Values are pretty simple: every value appears in the mask must appear
+     * in the source signatures, otherwise it's a failure *)
+    let vals = 
+      let sig_val_map = List.fold sig_vals ~init:Map.empty ~f:(
+        fun map node -> Map.add_exn map ~key:(Node.elem node) ~data:node
+      ) in
+      List.map mask_vals ~f:(fun varid_node -> Map.find_exn sig_val_map (Node.elem varid_node))
+    in
+    (* Type constructors are more complicated. In addition to previous requirement,
+     * if the mask enumerates type constructors, the enumerated type construct most precisely
+     * match the list of type constructors in the sig: it is not legal to expose only a subset
+     * of type constructors of a type. *)
+    let tycons = 
+      let sig_tycon_map = List.fold sig_tycons ~init:Map.empty ~f:(
+        fun map node -> Map.add_exn map ~key:(Node.elem @@ fst @@ node) ~data:node
+      ) in
+      List.map mask_tycons ~f:(
+        function 
+        | R.Sig.Any conid_node -> Map.find_exn sig_tycon_map (Node.elem conid_node)
+        | R.Sig.Enumerated (conid_node, mask_dcons) -> 
+          let compare cnode1 cnode2 = ConId.compare (Node.elem cnode1) (Node.elem cnode2) in
+          let (sig_tycon, sig_dcons) = Map.find_exn sig_tycon_map (Node.elem conid_node) in
+          if List.is_empty mask_dcons then
+            (sig_tycon, [])
+          else
+            let sig_dcons'  = List.sort sig_dcons ~compare in
+            let mask_dcons' = List.sort mask_dcons ~compare in
+            assert (List.equal (fun x y -> compare x y = 0) sig_dcons' mask_dcons');
+            (sig_tycon, sig_dcons')
+      )
+    in
+    R.Sig.Sig (tycons, vals)
+
+let sig_empty : R.sigt = R.Sig.Sig ([], [])
+
+let sigmask_any : R.sigmask = R.Sig.Any
+
+(* Obtain a minimum signature that satisfies the sigmask *)
+let sigmask_minimum_sig (sigmask : R.sigmask) : R.sigt = 
+  match sigmask with 
+  | R.Sig.Any -> sig_empty
+  | R.Sig.Enumerated (tycon_masks, val_masks) ->
+    let vals = val_masks in
+    let tycons = List.map tycon_masks ~f:(
+      function R.Sig.Enumerated (tycon, dcons) -> (tycon, dcons)
+             | R.Sig.Any tycon -> (tycon, [])
+    )
+    in 
+    R.Sig.Sig (tycons, vals)
+
+
+(* Missing an exposing clause means it the mask accepts all signatures 
+ * This makes sense for import statement but arguably makes much less sense for module decl
+ * Without exposing statement a better design would be treating it as exposing nothing 
+ * instead of everything, especially because we have an explicit exposing(..) for doing it.
+ *)
+let exposing_to_sigmask (exposing_opt : P.exposing option) : R.sigmask = 
+  match exposing_opt with
+  | None -> R.Sig.Any
+  | Some exposing -> 
+    match exposing with 
+    | P.Any -> sigmask_any
+    | P.Idents ids ->
+      let fcon exposed_tycon = 
+        match exposed_tycon with 
+        | P.AbsTyCon con 
+        | P.TyCon con ->    
+          let tycon : R.Sig.sigmask_tycon = R.Sig.Enumerated (as_tyconid con, []) in
+          Some tycon
+        | P.Var _ -> None
+      in
+      let fvar exposed_var =
+        match exposed_var with 
+        | P.AbsTyCon _ | P.TyCon _  -> None
+        | P.Var v -> Some (as_resolved_node v)
+      in
+      let tycons = List.filter_map ids ~f:fcon
+      and vals   = List.filter_map ids ~f:fvar in
+      R.Sig.Enumerated (tycons, vals)
+
+
+let resolve_imports ~export_dict (imports : P.import list) : path_dict * (R.path * R.sigmask) list =
   let f (path_map : path_dict) (P.Import (path, as_con_opt, exposing_opt)) = 
     let path_map' = 
       match as_con_opt with
@@ -83,56 +180,40 @@ let resolve_imports ~export_dict (imports : P.import list) : path_dict * (R.path
         let as_path = P.Just (Node.elem con) in
         Map.add_exn path_map ~key:as_path ~data:(Node.elem path)
     in
-    let import' : R.path * R.imported_exposed = 
-      match exposing_opt with 
-      | None -> (as_resolved_node path, R.Ids {tycons=[]; vals=[]})
-      | Some P.Any -> (as_resolved_node path, R.Unresolved)
-      | Some (P.Idents ids) ->
-        let fcon exposed_tycon = 
-          match exposed_tycon with 
-          | P.AbsTyCon con -> Option.some @@ R.TyCon (as_tyconid con, R.Opaque)
-          | P.TyCon con ->    Option.some @@ R.TyCon (as_tyconid con, R.Unresolved)
-          | P.Var _ ->        None
-        in
-        let fvar exposed_var =
-          match exposed_var with 
-          | P.AbsTyCon _ | P.TyCon _  -> None
-          | P.Var v -> Some (as_resolved_node v)
-        in
-        let tycons = List.filter_map ids ~f:fcon
-        and vals   = List.filter_map ids ~f:fvar in
-        (as_resolved_node path, R.Ids { tycons; vals })
-    in 
-    (path_map', import')
+    (path_map', (as_resolved_node path, exposing_to_sigmask exposing_opt))
   in
   List.fold_map imports ~init:Map.empty ~f:f
 
-let imports_to_maps (imports : (R.path * R.imported_exposed) list) =
-  let f ((dcon_map, fvar_map) as maps) (path, exposed) =
-    match exposed with 
-    | R.Unresolved -> maps
-    | R.Ids {tycons; vals} -> 
-      let dcon_map' = List.fold tycons ~init:dcon_map ~f:(
-        fun map tycon -> 
+let imports_to_maps (imports : (R.path * R.sigmask) list) =
+  let f ((tycon_map, dcon_map, fvar_map) as maps) (path, sigmask) =
+    match sigmask with 
+    | R.Sig.Any -> maps
+    | R.Sig.Enumerated (tycons, vals) -> 
+      let (tycon_map', dcon_map') = List.fold tycons ~init:(tycon_map, dcon_map) ~f:(
+        fun (tycon_map, dcon_map) (tycon : R.Sig.sigmask_tycon) -> 
           match tycon with 
-          | R.Alias _  
-          | R.TyCon (_, R.Unresolved) 
-          | R.TyCon (_, R.Opaque) -> map
-          | R.TyCon (_, R.DCons conids) -> 
-            List.fold conids ~init:map ~f:(
-              fun (map : dcon_map) conid -> Map.add_exn map ~key:(Node.elem conid) ~data:(Node.elem path)
-            )
+          | R.Sig.Any conid -> 
+            let tycon_map' = Map.add_exn tycon_map ~key:(Node.elem conid) ~data:(Node.elem path) in
+            (tycon_map', dcon_map)
+          | R.Sig.Enumerated (conid, dcons) -> 
+            let tycon_map' = Map.add_exn tycon_map ~key:(Node.elem conid) ~data:(Node.elem path) in
+            let dcon_map' = 
+              List.fold dcons ~init:dcon_map ~f:(
+                fun (map : dcon_map) conid -> 
+                  Map.add_exn map ~key:(Node.elem conid) ~data:(Node.elem path)
+              )
+            in (tycon_map', dcon_map')
       )
       in 
       let fvar_map' = List.fold vals ~init:fvar_map ~f:(
         fun map var -> Map.add_exn map ~key:(Node.elem var) ~data:(Node.elem path)
       )
       in
-      (dcon_map', fvar_map')
+      (tycon_map', dcon_map', fvar_map')
   in
-  List.fold imports ~init:(Map.empty, Map.empty) ~f
+  List.fold imports ~init:(Map.empty, Map.empty, Map.empty) ~f
 
-let resolve_var ((path_map, _, fvar_map): dicts) (vctx : vctx) (qvar : P.qvar) =
+let resolve_var ((path_map, _, _, fvar_map): dicts) (vctx : vctx) (qvar : P.qvar) =
   let (P.QVar (path_opt, var)) = Node.elem qvar in
   match path_opt with 
   | Some path -> 
@@ -160,7 +241,7 @@ let resolve_var ((path_map, _, fvar_map): dicts) (vctx : vctx) (qvar : P.qvar) =
         let fvar = R.FVar (R.Unresolved (as_resolved_node var)) in
         Node.node fvar (Some (Node.attr qvar))
 
-let resolve_dcon ((path_map, dcon_map, _) : dicts) (dctx : dctx) qcon =
+let resolve_dcon ((path_map, _, dcon_map, _) : dicts) (dctx : dctx) qcon =
   let (P.QCon (path_opt, con)) = Node.elem qcon in
   match path_opt with 
   | Some path -> 
@@ -182,13 +263,20 @@ let resolve_dcon ((path_map, dcon_map, _) : dicts) (dctx : dctx) qcon =
         let fdcon = R.FDCon (R.Unresolved (as_resolved_node con)) in
         Node.node fdcon (Some (Node.attr qcon))
 
-let rec collect_binders (pat : P.pat) : VarId.t list =
+(* Parser does not support parsing tycons yet *)
+let resolve_tycon ((path_map, tycon_map, _, _) : dicts) (tctx : tctx) qcon =
+  assert false
+
+let rec collect_binders_node (pat : P.pat) : (VarId.t R.node) list =
   match Node.elem pat with 
   | P.Any | P.Unit | P.EmptyList | P.Literal _ -> []
-  | P.List pats  -> List.concat (List.map pats ~f:collect_binders)
-  | P.Tuple pats -> List.concat (List.map pats ~f:collect_binders)
-  | P.Ctor (_, pats) -> List.concat (List.map pats ~f:collect_binders)
-  | P.Var v -> [Node.elem v]
+  | P.List pats  -> List.concat (List.map pats ~f:collect_binders_node)
+  | P.Tuple pats -> List.concat (List.map pats ~f:collect_binders_node)
+  | P.Ctor (_, pats) -> List.concat (List.map pats ~f:collect_binders_node)
+  | P.Var v -> [as_resolved_node v]
+
+let collect_binders (pat : P.pat) : VarId.t list =
+  collect_binders_node pat |> List.map ~f:Node.elem
 
 let bind_binders vctx varids =
   List.fold_map varids ~init:vctx ~f:(
@@ -278,7 +366,7 @@ let rec translate_expr ((tctx, dctx, vctx) as ctx) dicts (expr : P.expr) : R.exp
  * value defintions into two separate bins without needing to worry about accidental
  * captures.
  *)
-and translate_decls (tctx, dctx, vctx) ((path_dict, dcon_map, fvar_map) as dicts) (decls : P.decl list) =
+and translate_decls (tctx, dctx, vctx) ((path_dict, tycon_map, dcon_map, fvar_map) as dicts) (decls : P.decl list) =
 
   let extract_tycons decls = 
     List.filter_map decls ~f:(
@@ -352,18 +440,35 @@ and translate_decls (tctx, dctx, vctx) ((path_dict, dcon_map, fvar_map) as dicts
    * does not support it for now. *)
   ((tctx', dctx', vctx'), (tycons', decls'))
 
+let infersig_from_decls (decls : P.decl list) = 
+  let (sig_tycons, sig_vals) = 
+    List.fold_right decls ~init:([], []) ~f:(
+      fun decl (sig_tycons, sig_vals) -> 
+        match Node.elem decl with 
+        | TyCon -> assert false
+        | Annot _ -> (sig_tycons, sig_vals)
+        | P.Pat (pat, _) -> (sig_tycons, collect_binders_node pat @ sig_vals)
+        | P.Fun ((var, _), _) -> (sig_tycons, as_resolved_node var::sig_vals)
+    )
+  in R.Sig.Sig (sig_tycons, sig_vals)
+
 (* TODO: perform imported dictionary lookup *)
 let resolve ~modpath ~export_dict (t : P.m) : R.m = 
   let (P.Mod (mdecl, imports, decls)) = t in
   let (path_map, imports) = resolve_imports ~export_dict imports in
-  let (dcon_map, fvar_map) = imports_to_maps imports in
+  let (tycon_map, dcon_map, fvar_map) = imports_to_maps imports in
   let (_, (ids_tycons', ids_vals')) = 
-    translate_decls (Map.empty, Set.empty, Map.empty) (path_map, dcon_map, fvar_map) decls in
+    translate_decls (Map.empty, Set.empty, Map.empty) (path_map, tycon_map, dcon_map, fvar_map) decls in
+  let m_sigmask = 
+    match mdecl with 
+    | None -> sigmask_any
+    | Some (P.MDecl (_, exposing_opt)) -> exposing_to_sigmask exposing_opt
+  in
   (* Now we filter the organized tycons and values with the module export spec
    * to generate the list of exported identifiers. *)
   {
     modid   = modpath;
-    exports = {tycons=[]; vals=[]};
+    exports = apply_sigmask m_sigmask (infersig_from_decls decls);
     imports = imports; 
     tycons  = ids_tycons';
     vals    = ids_vals';

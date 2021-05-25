@@ -138,30 +138,45 @@ struct
     | Pat   of annot list * pat * expr
     | Fun   of annot option * (bvar * (pat list)) * expr
 
-  type imported_dcon = 
-    (* exposing (...,TyCon(..), ...  )*)
-    | Unresolved 
-    | DCons of DConId.t node list
-    | Opaque
+  (* This module introduces "signature" ("sigt") and "signature mask" ("sigmask") 
+   * 
+   * - A signature describes the "shape" of a module, that is, what TyCons, DCons
+   *   and values it exposes to the outside.
+   * - A signature mask specifies a means to derive a signature based on another
+   *   signature by picking items from the orignal signature. 
+   *
+   * Ideally signatures should also contain type information. That is, signature 
+   * matching should be part of type checking. However by performing this step before
+   * type checking this allows as to have an IR that is useable for Elf, without having
+   * to figure out type-checking. This also enables sanity checks of proper project
+   * dependencies. 
+   *)
+  module Sig =
+  struct
+    (* Signature type *)
+    type sig_tycon = TyConId.t node * (DConId.t node list)
+    type sig_val   = VarId.t node
+    type t = Sig of (sig_tycon list) * (sig_val list)
 
-  type exposed_tycon_kind =
-    | TyCon of TyConId.t node * imported_dcon
-    | Alias of TyConId.t 
+    (* Signature mask *)
+    type sigmask_tycon = 
+      | Enumerated of TyConId.t node * (DConId.t node list)
+      | Any        of TyConId.t node
 
-  type ids = {
-    tycons : exposed_tycon_kind list;
-    vals   : VarId.t node list;
-  }
+    type sigmask_val = VarId.t node
 
-  type imported_exposed = 
-    (* import M exposing (..) **)
-    | Unresolved
-    | Ids of ids
+    type mask = 
+      | Any 
+      | Enumerated of (sigmask_tycon list) * (sigmask_val list)
+  end
+
+  type sigt    = Sig.t
+  type sigmask = Sig.mask
 
   type m = {
     modid   : path option;
-    exports : ids;
-    imports : (path * imported_exposed) list;
+    exports : sigt;
+    imports : (path * sigmask) list;
     (* TopLevel decls needs to keep track of field name because they are exported, 
      * In particular, a single val definition can export multiple names *)
     tycons  : ((TyConId.t * TyCon.t) * typdecl) list;
@@ -211,44 +226,48 @@ struct
     sprintf ("let {%s} in %s : sig {%s} = struct {tycons {%s};vals {%s}}") 
             (String.concat ~sep:";" @@ imports_to_strings imports)
             (Core.Option.value_map modid ~default:"?" ~f:path_to_string)
-            (exports_to_string exports)
+            (sigt_to_string exports)
             (String.concat ~sep:";" tycons_strings)
             (String.concat ~sep:";" vals_strings)
+  
+  and sigmask_to_string (sigmask : sigmask) = 
+    match sigmask with
+    | Sig.Any -> "(..)"
+    | Sig.Enumerated (tycons, vals) -> 
+      let tycon_strs = List.map tycons ~f:(
+        function 
+        | (Sig.Enumerated (id_node, dcons)) -> 
+          let id_str = TyConId.to_string (Node.elem id_node) in
+          let dcons_str = concat_map ", " (fun id -> DConId.to_string @@ Node.elem id) dcons
+          in
+          sprintf "Tycon %s (%s)" id_str dcons_str
+        | Sig.Any id_node -> "TyCon " ^ TyConId.to_string (Node.elem id_node) ^ " (..)"
+      ) in
+      let vals = List.map vals ~f:(
+        fun varid_node -> "Val " ^ VarId.to_string @@ Node.elem varid_node
+      ) 
+      in String.concat ~sep:";" (tycon_strs @ vals) 
+
+  and sigt_to_string (Sig.Sig (tycons, vals)) = 
+    let tycon_strs = List.map tycons ~f:(
+      fun (id_node, dcons) -> 
+        let id_str = TyConId.to_string (Node.elem id_node) in
+        let dcons_str = concat_map ", " (fun id -> DConId.to_string @@ Node.elem id) dcons
+        in
+        sprintf "Tycon %s (%s)" id_str dcons_str
+    ) in
+    let vals = List.map vals ~f:(
+      fun varid_node -> "Val " ^ VarId.to_string @@ Node.elem varid_node
+    ) 
+    in String.concat ~sep:";" (tycon_strs @ vals) 
 
   and imports_to_strings imports = 
     List.map imports ~f:(
-      fun (path, exposed) ->
+      fun (path, sigmask) ->
         let path_str = path_to_string path in
-        let sig_str = 
-          match exposed with 
-          | Unresolved -> "(..)"
-          | Ids {tycons; vals} -> 
-            let tycon_strs = List.map tycons ~f:(
-              function 
-              | (TyCon (id_node, dcons)) -> 
-                let id_str = TyConId.to_string (Node.elem id_node) in
-                let dcons_str = 
-                  match dcons with 
-                  | Unresolved -> ".."
-                  | Opaque -> ""
-                  | DCons dcons -> 
-                    concat_map ", " (fun id -> DConId.to_string @@ Node.elem id) dcons
-                in
-                sprintf "Tycon %s (%s)" id_str dcons_str
-              | Alias id_node -> "TyCon " ^  TyConId.to_string id_node
-            ) in
-            let vals = List.map vals ~f:(
-              fun varid_node -> "Val " ^ VarId.to_string @@ Node.elem varid_node
-            ) 
-            in String.concat ~sep:";" (tycon_strs @ vals)
-        in 
+        let sig_str = sigmask_to_string sigmask in 
         sprintf "%s : Opening {%s}" path_str sig_str
     )
-
-  and exports_to_string {tycons; vals} =
-    assert (List.is_empty tycons);
-    assert (List.is_empty vals);
-    "(* Unimplemented *)"
 
   and tycon_to_string _tycon : string = 
     assert false
