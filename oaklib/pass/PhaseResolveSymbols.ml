@@ -45,14 +45,12 @@ let as_resolved_node node =
   let (elem, attr) = Node.both node in
   Node.node elem (Some attr)
 
-let as_dconid con = 
-  let (elem, attr) = Node.both con in
-  Node.node (DConId.of_string (ConId.to_string elem)) (Some attr)
+let map_to_resolved f pnode =
+  let (elem, attr) = Node.both pnode in
+  Node.node (f elem) (Some attr)
 
-let as_tyconid con = 
-  let (elem, attr) = Node.both con in
-  Node.node (TyConId.of_string (ConId.to_string elem)) (Some attr)
-
+let as_dconid conid = DConId.of_string (ConId.to_string conid)
+let as_tyconid conid = TyConId.of_string (ConId.to_string conid)
 
 (* TyCons and DCons must use separate map because they live in different 
  * namespaces, hence name collisions between them would be bad. Consider this:
@@ -110,7 +108,7 @@ let apply_sigmask (sigmask : R.sigmask) (sigt : R.sigt) : R.sigt =
         function 
         | R.Sig.Any conid_node -> Map.find_exn sig_tycon_map (Node.elem conid_node)
         | R.Sig.Enumerated (conid_node, mask_dcons) -> 
-          let compare cnode1 cnode2 = ConId.compare (Node.elem cnode1) (Node.elem cnode2) in
+          let compare cnode1 cnode2 = DConId.compare (Node.elem cnode1) (Node.elem cnode2) in
           let (sig_tycon, sig_dcons) = Map.find_exn sig_tycon_map (Node.elem conid_node) in
           if List.is_empty mask_dcons then
             (sig_tycon, [])
@@ -162,8 +160,9 @@ let exposing_to_sigmask ~default (exposing_opt : P.exposing option) : R.sigmask 
         match exposed_tycon with 
         | P.AbsTyCon con 
         | P.TyCon con ->    
-          let tycon : R.Sig.sigmask_tycon = R.Sig.Enumerated (as_tyconid con, []) in
-          Some tycon
+          let tycon : R.Sig.sigmask_tycon = 
+            R.Sig.Enumerated (map_to_resolved as_tyconid con, []) 
+          in Some tycon
         | P.Var _ -> None
       in
       let fvar exposed_var =
@@ -253,20 +252,20 @@ let resolve_dcon ((path_map, _, dcon_map, _) : dicts) (dctx : dctx) qcon =
   | Some path -> 
     let path' = Map.find_exn path_map (Node.elem path) in
     let path_node' = Node.node path' (Some (Node.attr path)) in
-    let fcon = R.FDCon (R.Resolved (path_node', as_resolved_node con)) in
+    let fcon = R.FDCon (R.Resolved (path_node', map_to_resolved as_dconid con)) in
     Node.node fcon (Some (Node.attr qcon))
   | None -> 
-    if Set.mem dctx (Node.elem con) then
-      let con' = R.BDCon (Node.node (Node.elem con) (Some (Node.attr con))) in
+    if Set.mem dctx (as_dconid @@ Node.elem con) then
+      let con' = R.BDCon (map_to_resolved as_dconid con) in
       Node.node con' (Some (Node.attr qcon))
     else
-      match Map.find dcon_map (Node.elem con) with
+      match Map.find dcon_map (as_dconid @@ Node.elem con) with
       | Some path' -> 
         let path_node' = Node.node path' None in
-        let fdcon = R.FDCon (R.Resolved (path_node', as_resolved_node con)) in
+        let fdcon = R.FDCon (R.Resolved (path_node', map_to_resolved as_dconid con)) in
         Node.node fdcon (Some (Node.attr qcon))
       | None -> 
-        let fdcon = R.FDCon (R.Unresolved (as_resolved_node con)) in
+        let fdcon = R.FDCon (R.Unresolved (map_to_resolved as_dconid con)) in
         Node.node fdcon (Some (Node.attr qcon))
 
 (* Parser does not support parsing tycons yet *)

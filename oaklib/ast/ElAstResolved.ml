@@ -4,8 +4,8 @@
 module Node    = ElAst.Node
 
 module VarId   = ElAst.VarId
-module TyConId = ElAst.ConId
-module DConId  = ElAst.ConId
+module TyConId = ElAst.Ident ()
+module DConId  = ElAst.Ident ()
 
 (* We can have multiple variable "namespaces" if we want. 
  * Each instantiation of this functor gives us a separate, independent

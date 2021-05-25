@@ -48,29 +48,19 @@ module type IDENT = sig
   val compare : t -> t -> int
 end
 
-module VarId : IDENT =
-struct
+module Ident () =
+struct 
   type t = string
   let of_string s = s
   let to_string t = t
   let compare = String.compare
 end
 
-module ConId : IDENT =
-struct
-  type t = string
-  let of_string s = s
-  let to_string t = t
-  let compare = String.compare
-end
+module VarId : IDENT = Ident ()
 
-module FieldId : IDENT =
-struct
-  type t = string
-  let of_string s = s
-  let to_string t = t
-  let compare = String.compare
-end
+module ConId : IDENT = Ident ()
+
+module FieldId : IDENT = Ident ()
 
 (* Definitions of external language syntax elements *)
 module Syntax = 
