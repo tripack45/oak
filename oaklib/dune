@@ -10,7 +10,7 @@
 
 (library
  (name oaklib)
- (flags :standard -rectypes)
+ ; (flags :standard -rectypes)
  (libraries menhirLib core))
 
 (include_subdirs unqualified)

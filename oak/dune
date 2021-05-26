@@ -1,4 +1,4 @@
 (executable
   (name oak)
-  (flags :standard -rectypes)
+  ; (flags :standard -rectypes)
   (libraries oaklib))
