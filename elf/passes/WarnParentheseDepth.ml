@@ -25,8 +25,8 @@ open ElAst.Node
 module BindingContext : 
 sig 
   type binder =
-    | Val of pat
-    | Fun of var
+    | Val of pat'
+    | Fun of var'
     | Lam
   type t 
   val empty : t
@@ -35,8 +35,8 @@ sig
 end =
 struct
   type binder =
-    | Val of pat
-    | Fun of var
+    | Val of pat'
+    | Fun of var'
     | Lam
 
   (* Contex is a stack of a binder and the position of the enclosing construct *)
@@ -51,7 +51,7 @@ end
 
 type binder    = BindingContext.binder
 type ctx       = BindingContext.t
-type violation = (binder * pos) list * expr * int
+type violation = (binder * pos) list * expr' * int
 
 (* The result of the analysis can be either 
  * - Violations are found, in which case we stop tracking parentheses depths as 
@@ -87,7 +87,9 @@ let run ?(max_depth=5) (Mod (_mdecl, _imports, decls)) : result =
   let rec decl_par_depths ctx decl : result =
     let (decl, pos) = both decl in
     match decl with 
-    | TyCon  | Annot _  -> bot
+    | Annot _  
+    | TyCon _ 
+    | Alias _ -> bot
     | Pat (pat, e) -> 
       let ctx' = BindingContext.add ctx (Val pat, pos) in
       expr_par_depths ctx' e
