@@ -18,6 +18,8 @@ struct
 
   (* Identifiers *)
   let var name pos  : var'  = node (VarId.of_string name) pos
+  let tvar name pos : tvar' = node (TVarId.of_string name) pos
+  let rvar name pos : rvar' = node (RVarId.of_string name) pos
   let con name pos  : con'  = node (ConId.of_string name) pos
   
   let id_var var      : exposing_ident = Var var
@@ -192,8 +194,8 @@ exposing:
 | EXPOSING LPAREN ids=separated_nonempty_list(COMMA, id) RPAREN                     { Module.Idents ids       }
 
 topdecl:
-| TYPE                                                                              { assert false       }
-| decl                                                                              { $1                 }
+| typdecl                                                                           { $1                      }
+| decl                                                                              { $1                      }
 
 decls:
 | LDELIM separated_nonempty_list(SEMI, decl) RDELIM                                 { $2 }
@@ -212,9 +214,53 @@ udecl:
 gendecl :
 | var OF_TYPE type_                                                                 { node (Decl.Annot ($1, $3)) $loc }
 
+typdecl:
+| TYPE ALIAS simpletype EQ type_                                                    { node (Decl.Alias ($3, $5)) $loc }
+| TYPE simpletype EQ separated_nonempty_list(BAR, constr)                           { node (Decl.TyCon ($2, $4)) $loc }
+
+simpletype:
+| tycon list(var)                                                                   { ($1, $2)           }
+
+constr:
+| tycon list(atype)                                                                 { ($1, $2)           }
+
 // type is an OCaml keyword
-type_:
-| LPAREN RPAREN                                                                     { node Typ.Unit $loc }
+// Function type
+type_ :
+| btype ARROW type_                                                                 { node (Typ.Arrow ($1, $3)) $loc }
+| btype                                                                             { $1                             }
+
+// Type application
+btype:
+| btype atype                                                                       { node (Typ.TApp ($1, $2)) $loc  }
+| atype                                                                             { $1                             }
+
+// Elm does not have [TyCon] syntax for Lists, but it could be nice to have
+atype:
+| tvar                                                                              { node (Typ.TVar $1)       $loc  }
+| gtycon                                                                            { $1                             }
+| LPAREN t=type_ COMMA ts=separated_nonempty_list(COMMA, type_) RPAREN              { node (Typ.Tuple (t::ts)) $loc  }
+| LKET type_ RKET                                                                   { assert false                   }
+| LBRACE row RBRACE                                                                 { node (Typ.Record $2)     $loc  }
+| LPAREN type_ RPAREN                                                               { $2                             }
+
+gtycon:
+| tycon                                                                             { node (Typ.TyCon $1) $loc       }
+| LPAREN RPAREN                                                                     { node (Typ.Unit) $loc           }
+/*
+| LKET RKET                                                                         { node (Typ.EmptyList)     $loc  }
+*/
+
+row : 
+| rvar                                                                              { Typ.RVar $1                    } 
+| row BAR fields                                                                    { Typ.Extension ($1, $3)         }
+| fields                                                                            { Typ.Fields $1                  }
+
+fields:
+| separated_nonempty_list(COMMA, field)                                             { $1                             } 
+
+field :
+| fieldid OF_TYPE type_                                                             { ($1, $3)                       }
 
 // Function declaration
 // - Elm does not support custom operators
@@ -296,7 +342,7 @@ alt:
 // nor does it reference a qualified variable from another module. It's just a label of variable-like syntax.
 // Hence VARID should be used
 fbind :
-| v=VARID EQ e=exp                                                                  { (field v $loc(v), e)              }
+| fieldid EQ e=exp                                                                  { ($1, e)              }
 
 // Pattern language 
 pat:
@@ -330,6 +376,18 @@ id:
 
 var:
 | VARID                                                                             { var $1 $loc }
+
+tvar:
+| VARID                                                                             { tvar $1 $loc }
+
+rvar:
+| VARID                                                                             { rvar $1 $loc }
+
+fieldid:
+| VARID                                                                             { field $1 $loc }
+
+tycon:
+| CONID                                                                             { con $1 $loc }
 
 qvar:
 | qvarid                                                                            { $1 }

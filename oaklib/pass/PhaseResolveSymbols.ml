@@ -371,7 +371,8 @@ and translate_decls (tctx, dctx, vctx) ((path_dict, tycon_map, dcon_map, fvar_ma
     List.filter_map decls ~f:(
       fun (decl : P.decl') ->
         match Node.elem decl with 
-        | P.TyCon -> assert false 
+        | P.TyCon _ -> assert false 
+        | P.Alias _ -> assert false
         | _ -> None
     )
   in
@@ -444,8 +445,9 @@ let infersig_from_decls (decls : P.decl' list) =
     List.fold_right decls ~init:([], []) ~f:(
       fun decl (sig_tycons, sig_vals) -> 
         match Node.elem decl with 
-        | TyCon -> assert false
-        | Annot _ -> (sig_tycons, sig_vals)
+        | P.TyCon _ -> assert false
+        | P.Alias _ -> assert false
+        | P.Annot _ -> (sig_tycons, sig_vals)
         | P.Pat (pat, _) -> (sig_tycons, collect_binders_node pat @ sig_vals)
         | P.Fun ((var, _), _) -> (sig_tycons, var::sig_vals)
     )

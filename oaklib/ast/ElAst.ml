@@ -57,9 +57,9 @@ struct
 end
 
 module VarId : IDENT = Ident ()
-
+module TVarId : IDENT = Ident ()
+module RVarId : IDENT = Ident ()
 module ConId : IDENT = Ident ()
-
 module FieldId : IDENT = Ident ()
 
 (* Definitions of external language syntax elements *)
@@ -80,6 +80,12 @@ struct
 
   type var = VarId.t
   type var' = var node
+
+  type tvar = TVarId.t
+  type tvar' = tvar node
+
+  type rvar = RVarId.t
+  type rvar' = rvar node
 
   type con = ConId.t
   type con' = con node
@@ -116,8 +122,20 @@ struct
   type pat' = pat node
 
   type typ = 
+    | TVar    of tvar'
     | Unit
-    | Tuple of typ node list
+    | TyCon  of con'
+    | Arrow  of typ' * typ'
+    | TApp   of typ' * typ'
+    | Record of row
+    | Tuple  of typ' list
+
+  (* This syntax affords much more flexibility compared to Elm *)
+  and row = 
+    | RVar      of rvar'
+    | Extension of row * (field' * typ') list
+    | Fields    of (field' * typ') list
+
   and typ' = typ node
 
   type op =
@@ -127,9 +145,18 @@ struct
     | GT    | GEQ
     | LT    | LEQ
 
-  (* decl depends on the yet provided definition of type expr *)
+  (* decl depends on the yet provided definition of type expr  *)
+  (* We use var' list instead of tvar' list for variable arguments of type constructors
+   *
+   * Elm compiler mixes up type variables and row variables so that it's type system 
+   * is inconsistent, and type checking crashes the compiler in some cases. Lack of 
+   * syntatic distinctin between row variables and type variables creates a problem for 
+   * us as we now need to disambiguous and fix them in a later phase. This also means
+   * we WILL reject (incorrect) Elm code that is accepted by the Elm compiler. This is
+   * one of the few cases that restricting the use of language makes more sense then not. *)
   type decl =
-    | TyCon 
+    | TyCon of (con' * var' list) * ((con' * typ' list) list)
+    | Alias of (con' * var' list) * typ'
     | Annot of var' * typ'
     | Pat   of pat' * expr'
     | Fun   of (var' * (pat' list)) * expr'
@@ -248,16 +275,27 @@ struct
   module Typ = 
   struct
     type typ = Syntax.typ =
+      | TVar    of tvar'
       | Unit
-      | Tuple of typ' list
+      | TyCon  of con'
+      | Arrow  of typ' * typ'
+      | TApp   of typ' * typ'
+      | Record of row
+      | Tuple  of typ' list
 
-    and typ' = Syntax.typ'
+    type typ' = Syntax.typ'
+
+    type row = Syntax.row =
+      | RVar      of rvar'
+      | Extension of row * (field' * typ') list
+      | Fields    of (field' * typ') list
   end
 
   module Decl = 
   struct
     type decl = Syntax.decl = 
-      | TyCon 
+      | TyCon of (con' * var' list) * ((con' * typ' list) list)
+      | Alias of (con' * var' list) * typ'
       | Annot of var' * typ'
       | Pat   of pat' * expr'
       | Fun   of (var' * (pat' list)) * expr'
@@ -338,7 +376,20 @@ struct
 
   and decl_to_string decl = 
     match (Node.elem decl) with
-    | TyCon -> "TyCon"
+    | TyCon ((con, vars), dcons) ->
+      let dcon_to_string (dcon, typs) = 
+        sprintf "%s %s" (con_to_string dcon)
+                        (concat_map " " typ_to_string typs)
+      in
+      sprintf "datatype %s %s = {%s}" 
+              (con_to_string con)
+              (concat_map " " var_to_string vars)
+              (concat_map "|" dcon_to_string dcons)
+    | Alias ((con, vars), typ) -> 
+      sprintf "type %s %s = %s" 
+              (con_to_string con)
+              (concat_map " " var_to_string vars)
+              (typ_to_string typ)
     | Annot (var, t) -> var_to_string var ^ " :: " ^ typ_to_string t
     | Pat   (pat, e) -> 
       sprintf "val %s = %s" 
@@ -407,8 +458,23 @@ struct
 
   and typ_to_string typ = 
     match Node.elem typ with 
-    | Unit -> "unit"
+    | TVar tvar -> Node.elem tvar |> TVarId.to_string
+    | Unit -> "()"
+    | TyCon c -> con_to_string c
+    | Arrow (t1, t2) -> typ_to_string t1 ^ " -> " ^ typ_to_string t2
+    | TApp (t1, t2) -> typ_to_string t1 ^ " " ^ typ_to_string t2
     | Tuple typs -> surround ("(", ")") @@ concat_map ", " typ_to_string typs
+    | Record row -> surround ("<", ">") @@ row_to_string row
+
+  and row_to_string row =
+    let field_to_string (field, typ) =
+       field_to_string field ^ ": " ^ typ_to_string typ
+    in
+    match row with 
+    | RVar rvar -> Node.elem rvar |> RVarId.to_string
+    | Extension (r, fields) ->
+      sprintf "%s & %s" (row_to_string r) (concat_map ", " field_to_string fields)
+    | Fields fields -> concat_map ", " field_to_string fields
 
   and qcon_to_string qcon =
     let QCon (path, con) = Node.elem qcon in
