@@ -17,6 +17,7 @@ type T a b c d  = A a
                 | F (a -> b -> c)
                 | G {x : Int}
                 | H {d | x : Int | y : Int}
+                | I {d | x : Html.Html | y : Int}
 
 type alias T2 = T Int
 

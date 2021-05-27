@@ -124,7 +124,7 @@ struct
   type typ = 
     | TVar    of tvar'
     | Unit
-    | TyCon  of con'
+    | TyCon  of qcon'
     | Arrow  of typ' * typ'
     | TApp   of typ' * typ'
     | Record of row
@@ -275,9 +275,9 @@ struct
   module Typ = 
   struct
     type typ = Syntax.typ =
-      | TVar    of tvar'
+      | TVar   of tvar'
       | Unit
-      | TyCon  of con'
+      | TyCon  of qcon'
       | Arrow  of typ' * typ'
       | TApp   of typ' * typ'
       | Record of row
@@ -460,7 +460,7 @@ struct
     match Node.elem typ with 
     | TVar tvar -> Node.elem tvar |> TVarId.to_string
     | Unit -> "()"
-    | TyCon c -> con_to_string c
+    | TyCon c -> qcon_to_string c
     | Arrow (t1, t2) -> typ_to_string t1 ^ " -> " ^ typ_to_string t2
     | TApp (t1, t2) -> typ_to_string t1 ^ " " ^ typ_to_string t2
     | Tuple typs -> surround ("(", ")") @@ concat_map ", " typ_to_string typs

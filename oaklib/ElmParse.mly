@@ -245,7 +245,7 @@ atype:
 | LPAREN type_ RPAREN                                                               { $2                             }
 
 gtycon:
-| tycon                                                                             { node (Typ.TyCon $1) $loc       }
+| qtycon                                                                            { node (Typ.TyCon $1) $loc       }
 | LPAREN RPAREN                                                                     { node (Typ.Unit) $loc           }
 /*
 | LKET RKET                                                                         { node (Typ.EmptyList)     $loc  }
@@ -388,6 +388,9 @@ fieldid:
 
 tycon:
 | CONID                                                                             { con $1 $loc }
+
+qtycon:
+| qconid                                                                            { $1 }
 
 qvar:
 | qvarid                                                                            { $1 }
