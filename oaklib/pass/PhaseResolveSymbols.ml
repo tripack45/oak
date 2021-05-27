@@ -56,11 +56,10 @@ let as_tyconid conid = TyConId.of_string (ConId.to_string conid)
  * In this example uses of Con can either be ModuleX.Con or ModuleY.Con, depending
  * whether Con is being used as a TyCon or a DCon
  *)
-type path_dict = (P.path, R.path) Map.t
 type tycon_map = (TyConId.t, R.path) Map.t
 type dcon_map  = (DConId.t, R.path) Map.t
 type fvar_map  = (VarId.t, R.path) Map.t
-type dicts = path_dict * tycon_map * dcon_map * fvar_map
+type dicts = tycon_map * dcon_map * fvar_map
 
 (* tctx : Type Constructor Context
  * dctx : Data Constructor Context
@@ -170,18 +169,11 @@ let exposing_to_sigmask ~default (exposing_opt : P.exposing option) : R.sigmask 
       R.Sig.Enumerated (tycons, vals)
 
 
-let resolve_imports ~export_dict (imports : P.import list) : path_dict * (R.path' * R.sigmask) list =
-  let f (path_map : path_dict) (P.Import (path, as_con_opt, exposing_opt)) = 
-    let path_map' = 
-      match as_con_opt with
-      | None -> Map.add_exn path_map ~key:(Node.elem path) ~data:(Node.elem path)
-      | Some con -> 
-        let as_path = P.Just (Node.elem con) in
-        Map.add_exn path_map ~key:as_path ~data:(Node.elem path)
-    in
-    (path_map', (as_resolved_path path, exposing_to_sigmask ~default:sigmask_none exposing_opt))
-  in
-  List.fold_map imports ~init:Map.empty ~f:f
+let resolve_imports ~export_dict (imports : P.import list) : (R.path' * R.sigmask) list =
+  List.map imports ~f:(
+    fun (P.Import (path, _, exposing_opt)) ->
+      (as_resolved_path path, exposing_to_sigmask ~default:sigmask_none exposing_opt)
+  )
 
 let sigt_to_dicst (tycon_map, dcon_map, fvar_map) (path, sigt)  =
   let (R.Sig.Sig (tycons, dcons)) = sigt in
@@ -212,18 +204,11 @@ let imports_to_maps (imports : (R.path' * R.sigmask) list) =
   in
   List.fold imports ~init:(Map.empty, Map.empty, Map.empty) ~f
 
-let resolve_var ((path_map, _, _, fvar_map): dicts) (vctx : vctx) (qvar : P.qvar') =
+let resolve_var ((_,  _, fvar_map): dicts) (vctx : vctx) (qvar : P.qvar') =
   let (P.QVar (path_opt, var)) = Node.elem qvar in
   match path_opt with 
-  | Some path -> 
-    let path' = Map.find path_map (Node.elem path) 
-              (* Standard libraries can be accessed without imports
-               * Ideally we would maintain a whitelist instead of accepting everythin
-               *)
-              |> Option.value ~default:(Node.elem path)
-    in
-    let path_node' = Node.node path' (Some (Node.attr path)) in
-    let fvar = R.FVar (R.Resolved (path_node', var)) in
+  | Some path_node -> 
+    let fvar = R.FVar (R.Resolved (as_resolved_path path_node, var)) in
     Node.node fvar (Node.attr qvar)
   | None -> 
     match Map.find vctx (Node.elem var) with 
@@ -240,13 +225,11 @@ let resolve_var ((path_map, _, _, fvar_map): dicts) (vctx : vctx) (qvar : P.qvar
         let fvar = R.FVar (R.Unresolved var) in
         Node.node fvar (Node.attr qvar)
 
-let resolve_dcon ((path_map, _, dcon_map, _) : dicts) (dctx : dctx) qcon =
+let resolve_dcon ((_, dcon_map, _) : dicts) (dctx : dctx) qcon =
   let (P.QCon (path_opt, con)) = Node.elem qcon in
   match path_opt with 
-  | Some path -> 
-    let path' = Map.find_exn path_map (Node.elem path) in
-    let path_node' = Node.node path' (Some (Node.attr path)) in
-    let fcon = R.FDCon (R.Resolved (path_node', Node.map_elem as_dconid con)) in
+  | Some path_node -> 
+    let fcon = R.FDCon (R.Resolved (as_resolved_path path_node, Node.map_elem as_dconid con)) in
     Node.node fcon (Node.attr qcon)
   | None -> 
     if Set.mem dctx (as_dconid @@ Node.elem con) then
@@ -263,7 +246,7 @@ let resolve_dcon ((path_map, _, dcon_map, _) : dicts) (dctx : dctx) qcon =
         Node.node fdcon (Node.attr qcon)
 
 (* Parser does not support parsing tycons yet *)
-let resolve_tycon ((path_map, tycon_map, _, _) : dicts) (tctx : tctx) qcon =
+let resolve_tycon ((tycon_map, _, _) : dicts) (tctx : tctx) qcon =
   assert false
 
 let rec collect_binders_node (pat : P.pat') : (VarId.t R.node) list =
@@ -365,7 +348,7 @@ let rec translate_expr ((tctx, dctx, vctx) as ctx) dicts (expr : P.expr') =
  * value defintions into two separate bins without needing to worry about accidental
  * captures.
  *)
-and translate_decls (tctx, dctx, vctx) ((path_dict, tycon_map, dcon_map, fvar_map) as dicts) decls =
+and translate_decls (tctx, dctx, vctx) ((tycon_map, dcon_map, fvar_map) as dicts) decls =
 
   let extract_tycons decls = 
     List.filter_map decls ~f:(
@@ -456,10 +439,10 @@ let infersig_from_decls (decls : P.decl' list) =
 (* TODO: perform imported dictionary lookup *)
 let resolve ~modpath ~export_dict (t : P.m) : R.m = 
   let (P.Mod (mdecl, imports, decls)) = t in
-  let (path_map, imports) = resolve_imports ~export_dict imports in
+  let imports = resolve_imports ~export_dict imports in
   let (tycon_map, dcon_map, fvar_map) = imports_to_maps imports in
   let (_, (ids_tycons', ids_vals')) = 
-    translate_decls (Map.empty, Set.empty, Map.empty) (path_map, tycon_map, dcon_map, fvar_map) decls in
+    translate_decls (Map.empty, Set.empty, Map.empty) (tycon_map, dcon_map, fvar_map) decls in
   let m_sigmask = 
     match mdecl with 
     | None -> sigmask_any

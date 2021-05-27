@@ -29,12 +29,17 @@ let _ =
 
 module M = Core.Int.Map
 
-let m = Parse.parse_src src
-let () = print_endline "----- [Info] EL AST ----"
-let () = Parse.dump_with_layout @@ ElAst.ToString.m_to_string m
-let () = print_endline "----- [Phase] ResolveSymbols ----"
-let m = Pass.PhaseResolveSymbols.resolve ~modpath:None ~export_dict:[] m 
-let () = Parse.dump_with_layout @@ ElAstResolved.ToString.m_to_string m
+let () = 
+  let m = Parse.parse_src src in
+  let () = print_endline "----- [Info] EL AST ----" in
+  let () = Parse.dump_with_layout @@ ElAst.ToString.m_to_string m in
+  let () = print_endline "----- [Phase] ResolveModuleDependency ----" in
+  let (_, m) = Pass.PhaseResolveModuleDependency.expand_path_alias m in
+  let () = Parse.dump_with_layout @@ ElAst.ToString.m_to_string m in
+  let () = print_endline "----- [Phase] ResolveSymbols ----" in
+  let m = Pass.PhaseResolveSymbols.resolve ~modpath:None ~export_dict:[] m in
+  let () = Parse.dump_with_layout @@ ElAstResolved.ToString.m_to_string m in
+  ()
 
 (* let () = 
     print_endline (String.make 20 '=');

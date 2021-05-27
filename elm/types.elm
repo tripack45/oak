@@ -1,7 +1,7 @@
 module Example exposing (..)
 
 import Browser
-import Html exposing (Html, button, div, text)
+import Html as H exposing (Html, button, div, text)
 import Html.Events exposing (onClick)
 
 main =
@@ -18,6 +18,7 @@ type T a b c d  = A a
                 | G {x : Int}
                 | H {d | x : Int | y : Int}
                 | I {d | x : Html.Html | y : Int}
+                | J {d | x : Int | y : H.Html}
 
 type alias T2 = T Int
 
