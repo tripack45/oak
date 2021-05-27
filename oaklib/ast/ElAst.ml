@@ -89,22 +89,22 @@ struct
 
   type 'a par_node = ('a, pos * paren) Node.t
 
-  type var = VarId.t
+  type var = VarId.t      (* func => func *)
   type var' = var node
 
   type tvar = TVarId.t
-  type tvar' = tvar node
+  type tvar' = tvar node  (* List a => a *)
 
-  type mcon = MConId.t
+  type mcon = MConId.t    (* module X => X *)
   type mcon' = mcon node
 
-  type tycon = TyConId.t
+  type tycon = TyConId.t  (* type [alias] X => X *)
   type tycon' = tycon node
 
-  type dcon = DConId.t
+  type dcon = DConId.t    (* type X = A => A *)
   type dcon' = dcon node
 
-  type field = FieldId.t
+  type field = FieldId.t  (* { field = 1 } => field *)
   type field' = field node
 
   type lit = 
@@ -117,6 +117,8 @@ struct
     | Just of MConId.t
     | More of MConId.t * path
   type path' = path node
+
+  (* "q" for "qualified", meaning "could be prefixed by Module.Path." *)
 
   type qvar = QVar of path' option * var'
   type qvar' = qvar node
@@ -139,7 +141,7 @@ struct
   type pat' = pat node
 
   type typ = 
-    | TVar    of tvar'
+    | TVar   of tvar'
     | Unit
     | TyCon  of qtycon'
     | Arrow  of typ' * typ'
@@ -518,7 +520,7 @@ struct
     in 
     match snd (Node.attr e) with
     | Naked -> expr_str
-    | Wrapped n -> surround ("(", ")") expr_str
+    | Wrapped _ -> surround ("(", ")") expr_str
     
 
   and typ_to_string typ = 
