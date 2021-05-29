@@ -50,7 +50,7 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
     match typ with
     | Unit 
     | TVar _ -> typ
-    | TyCon qcon_node -> TyCon (Node.map_elem resolve_qcon qcon_node)
+    | TyCon qtycon_node -> TyCon (Node.map_elem resolve_qtycon qtycon_node)
     | Arrow (t1_node, t2_node) -> Arrow (rslv t1_node, rslv t2_node)
     | TApp (t1_node, t2_node)  -> TApp (rslv t1_node, rslv t2_node)
     | Tuple typ_nodes -> Tuple (List.map typ_nodes ~f:rslv)
@@ -96,7 +96,7 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
     | List es              -> List (List.map es ~f:rslv)
     | Record fields        -> Record (List.map fields ~f:(Tuple.T2.map_snd ~f:rslv))
     | Var v                -> Var (Node.map_elem resolve_qvar v)
-    | Con (qcon, es)       -> Con (Node.map_elem resolve_qcon qcon, List.map ~f:rslv es)
+    | Con (qdcon, es)      -> Con (Node.map_elem resolve_qdcon qdcon, List.map ~f:rslv es)
 
   and resolve_pat (pat : pat) =
     let rslv = Node.map_elem resolve_pat in
@@ -108,8 +108,8 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
     | Var _ -> pat
     | List pats   -> List (List.map ~f:rslv pats)
     | Tuple pats  -> Tuple (List.map ~f:rslv pats)
-    | Ctor (qcon, pats) -> 
-      Ctor (Node.map_elem resolve_qcon qcon, List.map ~f:rslv pats)
+    | Con (qdcon, pats) -> 
+      Con (Node.map_elem resolve_qdcon qdcon, List.map ~f:rslv pats)
 
   and resolve_path_opt path_node_opt =
     let path_node_opt' = 
@@ -125,8 +125,11 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
     in
     path_node_opt'
 
-  and resolve_qcon (QCon (path_node_opt, con_node)) =
-    QCon (resolve_path_opt path_node_opt, con_node)
+  and resolve_qtycon (QTyCon (path_node_opt, con_node)) =
+    QTyCon (resolve_path_opt path_node_opt, con_node)
+
+  and resolve_qdcon (QDCon (path_node_opt, con_node)) =
+    QDCon (resolve_path_opt path_node_opt, con_node)
 
   and resolve_qvar (QVar (path_node_opt, var_node)) =
     QVar (resolve_path_opt path_node_opt, var_node)

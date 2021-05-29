@@ -5,9 +5,9 @@ module Node    = ElAst.Node
 
 module VarId   = ElAst.VarId
 module TVarId  = ElAst.TVarId
-module RVarId  = ElAst.RVarId
-module TyConId = ElAst.Ident ()
-module DConId  = ElAst.Ident ()
+module RVarId  = ElAst.TVarId
+module TyConId = ElAst.TyConId
+module DConId  = ElAst.DConId
 
 module type BINDER = 
 sig
@@ -74,7 +74,7 @@ struct
   type lit    = ElAst.Syntax.lit
   type path   = ElAst.Syntax.path
   type tvar   = ElAst.Syntax.tvar
-  type rvar   = ElAst.Syntax.rvar
+  type rvar   = tvar
 
   type field'  = field node
   type lit'    = lit node
@@ -254,8 +254,8 @@ struct
     let open ElAst.Syntax in
     let rec to_string p = 
       match p with 
-      | Just con -> ElAst.ConId.to_string con
-      | More (con, p) -> ElAst.ConId.to_string con ^ "." ^ to_string p
+      | Just mcon -> ElAst.MConId.to_string mcon
+      | More (mcon, p) -> ElAst.MConId.to_string mcon ^ "." ^ to_string p
     in to_string (Node.elem path) 
 
   let binded_to_string id_to_string binder_to_string binded_node =
@@ -396,7 +396,7 @@ struct
        field_to_string field ^ ": " ^ typ_to_string typ
     in
     match row with 
-    | RVar rvar -> Node.elem rvar |> ElAst.RVarId.to_string
+    | RVar rvar -> Node.fold_elem ElAst.TVarId.to_string rvar  
     | Extension (r, fields) ->
       sprintf "%s & %s" (row_to_string r) (concat_map ", " field_to_string fields)
     | Fields fields -> concat_map ", " field_to_string fields

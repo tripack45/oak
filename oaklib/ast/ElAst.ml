@@ -30,6 +30,8 @@ sig
   val both : ('a, 'b) t -> 'a * 'b
   val map_elem  : ('a -> 'c) -> ('a, 'b) t -> ('c, 'b) t
   val map_attr  : ('b -> 'c) -> ('a, 'b) t -> ('a, 'c) t
+  val fold_elem  : ('a -> 'c) -> ('a, 'b) t -> 'c
+  val fold : ('a -> 'b -> 'c) -> ('a, 'b) t -> 'c
 end = 
 struct
   type ('a, 'b) t = 'a * 'b
@@ -39,6 +41,8 @@ struct
   let both node = node
   let map_elem f (elem, attr) = (f elem, attr)
   let map_attr f (elem, attr) = (elem, f attr)
+  let fold_elem f (e, _attr) = f e 
+  let fold f (e, attr) = f e attr
 end 
 
 module type IDENT = sig
@@ -58,8 +62,9 @@ end
 
 module VarId : IDENT = Ident ()
 module TVarId : IDENT = Ident ()
-module RVarId : IDENT = Ident ()
-module ConId : IDENT = Ident ()
+module MConId : IDENT = Ident () (* Path segement *)
+module TyConId : IDENT = Ident ()
+module DConId : IDENT = Ident ()
 module FieldId : IDENT = Ident ()
 
 (* Definitions of external language syntax elements *)
@@ -84,11 +89,14 @@ struct
   type tvar = TVarId.t
   type tvar' = tvar node
 
-  type rvar = RVarId.t
-  type rvar' = rvar node
+  type mcon = MConId.t
+  type mcon' = mcon node
 
-  type con = ConId.t
-  type con' = con node
+  type tycon = TyConId.t
+  type tycon' = tycon node
+
+  type dcon = DConId.t
+  type dcon' = dcon node
 
   type field = FieldId.t
   type field' = field node
@@ -100,15 +108,18 @@ struct
   type lit' = lit node
 
   type path =
-    | Just of ConId.t
-    | More of ConId.t * path
+    | Just of MConId.t
+    | More of MConId.t * path
   type path' = path node
 
   type qvar = QVar of path' option * var'
   type qvar' = qvar node
 
-  type qcon = QCon of path' option * con'
-  type qcon' = qcon node
+  type qtycon = QTyCon of path' option * tycon'
+  type qtycon' = qtycon node
+
+  type qdcon = QDCon of path' option * dcon'
+  type qdcon' = qdcon node
 
   type pat = 
     | Var        of var'
@@ -118,13 +129,13 @@ struct
     | Literal    of lit'
     | List       of (pat node) list
     | Tuple      of (pat node) list
-    | Ctor       of qcon' * (pat node list)
+    | Con        of qdcon' * (pat node list)
   type pat' = pat node
 
   type typ = 
     | TVar    of tvar'
     | Unit
-    | TyCon  of qcon'
+    | TyCon  of qtycon'
     | Arrow  of typ' * typ'
     | TApp   of typ' * typ'
     | Record of row
@@ -132,7 +143,7 @@ struct
 
   (* This syntax affords much more flexibility compared to Elm *)
   and row = 
-    | RVar      of rvar'
+    | RVar      of tvar'
     | Extension of row * (field' * typ') list
     | Fields    of (field' * typ') list
 
@@ -146,17 +157,22 @@ struct
     | LT    | LEQ
 
   (* decl depends on the yet provided definition of type expr  *)
-  (* We use var' list instead of tvar' list for variable arguments of type constructors
+  (* We tvar' for both typ variables and row variables
    *
    * Elm compiler mixes up type variables and row variables so that it's type system 
    * is inconsistent, and type checking crashes the compiler in some cases. Lack of 
    * syntatic distinctin between row variables and type variables creates a problem for 
    * us as we now need to disambiguous and fix them in a later phase. This also means
    * we WILL reject (incorrect) Elm code that is accepted by the Elm compiler. This is
-   * one of the few cases that restricting the use of language makes more sense then not. *)
+   * one of the few cases that restricting the use of language makes more sense then not. 
+   *
+   * The difference of typ and row variable is not one of syntatic but one of semantic, 
+   * that is, type and row variables both fall into the syntax category of "type variable", 
+   * but they belongs to a different "kind" upon type checking. 
+   *)
   type decl =
-    | TyCon of (con' * var' list) * ((con' * typ' list) list)
-    | Alias of (con' * var' list) * typ'
+    | TyCon of (tycon' * tvar' list) * ((dcon' * typ' list) list)
+    | Alias of (tycon' * tvar' list) * typ'
     | Annot of var' * typ'
     | Pat   of pat' * expr'
     | Fun   of (var' * (pat' list)) * expr'
@@ -177,7 +193,7 @@ struct
     | List       of expr' list  (* >= 0 elements *)
     | Record     of (field' * expr') list
     (* Data construction *)
-    | Con        of qcon' * (expr' list)
+    | Con        of qdcon' * (expr' list)
     (* Identifier refernce *)
     | Var        of qvar'
     (* Literals *)
@@ -187,8 +203,8 @@ struct
   and expr' = expr par_node
 
   type exposing_ident =
-    | AbsTyCon of con'
-    | TyCon    of con'
+    | AbsTyCon of tycon'
+    | TyCon    of tycon'
     | Var      of var'
 
   type exposing =
@@ -196,10 +212,10 @@ struct
     | Idents of exposing_ident list
 
   type mdecl = 
-    | MDecl of con' * exposing option
+    | MDecl of MConId.t node * exposing option
 
   type import = 
-    | Import of path' * con' option * exposing option
+    | Import of path' * MConId.t node option * exposing option
 
   (* The whole module *)
   type m = 
@@ -233,7 +249,7 @@ struct
       | Literal    of lit'
       | List       of pat' list
       | Tuple      of pat' list
-      | Ctor       of qcon' * (pat' list)
+      | Con        of qdcon' * (pat' list)
 
     type pat' = Syntax.pat'
   end
@@ -263,7 +279,7 @@ struct
       | List       of expr' list  (* >= 0 elements *)
       | Record     of (field' * expr') list
       (* Data construction *)
-      | Con        of qcon' * (expr' list)
+      | Con        of qdcon' * (expr' list)
       (* Identifier refernce *)
       | Var        of qvar'
       (* Literals *)
@@ -277,7 +293,7 @@ struct
     type typ = Syntax.typ =
       | TVar   of tvar'
       | Unit
-      | TyCon  of qcon'
+      | TyCon  of qtycon'
       | Arrow  of typ' * typ'
       | TApp   of typ' * typ'
       | Record of row
@@ -286,7 +302,7 @@ struct
     type typ' = Syntax.typ'
 
     type row = Syntax.row =
-      | RVar      of rvar'
+      | RVar      of tvar'
       | Extension of row * (field' * typ') list
       | Fields    of (field' * typ') list
   end
@@ -294,8 +310,8 @@ struct
   module Decl = 
   struct
     type decl = Syntax.decl = 
-      | TyCon of (con' * var' list) * ((con' * typ' list) list)
-      | Alias of (con' * var' list) * typ'
+      | TyCon of (tycon' * tvar' list) * ((dcon' * typ' list) list)
+      | Alias of (tycon' * tvar' list) * typ'
       | Annot of var' * typ'
       | Pat   of pat' * expr'
       | Fun   of (var' * (pat' list)) * expr'
@@ -310,10 +326,10 @@ struct
       | Idents of exposing_ident list
 
     type mdecl = Syntax.mdecl =
-      | MDecl of con' * exposing option
+      | MDecl of MConId.t node * exposing option
 
     type import = Syntax.import =
-      | Import of path' * con' option * exposing option
+      | Import of path' * MConId.t node option * exposing option
 
     type m = Syntax.m =
       | Mod of mdecl option * (import list) * (decl' list)
@@ -336,6 +352,49 @@ struct
     let (l', c') = pos2lc e in
     Printf.sprintf "%d:%d - %d:%d" l c l' c'
 
+  let field_to_string field = 
+    FieldId.to_string (Node.elem field)
+
+  let lit_to_string lit = 
+    match Node.elem lit with
+    | Int s    -> s
+    | Float s  -> s
+    | String s -> surround ("\"", "\"") s
+
+  let var_to_string v   = Node.fold_elem VarId.to_string v
+  let tvar_to_string tv = Node.fold_elem TVarId.to_string tv
+  let tycon_to_string t = Node.fold_elem TyConId.to_string t
+  let dcon_to_string d  = Node.fold_elem DConId.to_string d
+  let mcon_to_string m  = Node.fold_elem MConId.to_string m
+
+  let path_to_string path : string = 
+    let rec to_string p = 
+      match p with 
+      | Just con -> MConId.to_string con
+      | More (con, p) -> MConId.to_string con ^ "." ^ to_string p
+    in to_string (Node.elem path) 
+
+  let qid_to_string ~extract ~to_string qid =
+    let (path, id) = extract @@ Node.elem qid in
+    match Option.map path_to_string path with 
+    | Some path_str -> path_str ^ "." ^ to_string id 
+    | None -> to_string id
+
+  let qtycon_to_string qtycon =
+    qid_to_string ~extract:(fun (QTyCon (p_opt, tycon)) -> (p_opt, tycon))
+                  ~to_string:(Node.fold_elem TyConId.to_string)
+                  qtycon
+
+  let qdcon_to_string qdcon =
+    qid_to_string ~extract:(fun (QDCon (p_opt, tycon)) -> (p_opt, tycon))
+                  ~to_string:(Node.fold_elem DConId.to_string)
+                  qdcon
+
+  let qvar_to_string qvar =
+    qid_to_string ~extract:(fun (QVar (p_opt, tycon)) -> (p_opt, tycon))
+                  ~to_string:(Node.fold_elem VarId.to_string)
+                  qvar
+
   let rec m_to_string (Mod (mdecl, imports, decls)) =
     let mdecl_str   = Option.map mdecl_to_string  mdecl   in
     let import_strs = List.map   import_to_string imports in 
@@ -347,8 +406,8 @@ struct
     let id_to_string (id : exposing_ident) =
       match id with
       | Var var    -> var_to_string var
-      | TyCon con  -> con_to_string con ^ "(..)"
-      | AbsTyCon con -> con_to_string con
+      | TyCon con  -> tycon_to_string con ^ "(..)"
+      | AbsTyCon con -> tycon_to_string con
     in
     match exposing with 
     | Any -> "(..)"
@@ -357,9 +416,9 @@ struct
   and mdecl_to_string (MDecl (con, exposing_opt)) = 
     match exposing_opt with 
     | Some exposing -> 
-      sprintf "module %s exposing %s" (con_to_string con) (exposing_to_string exposing)
+      sprintf "module %s exposing %s" (mcon_to_string con) (exposing_to_string exposing)
     | None -> 
-      sprintf "module %s" (con_to_string con)
+      sprintf "module %s" (mcon_to_string con)
 
   and import_to_string (Import (path, as_opt, exposing_opt)) = 
     let exposing_str = 
@@ -368,7 +427,7 @@ struct
       | None -> ""
     in
     let as_str = 
-      match Option.map con_to_string as_opt with
+      match Option.map mcon_to_string as_opt with
       | Some s -> " as " ^ s
       | None -> ""
     in 
@@ -378,17 +437,17 @@ struct
     match (Node.elem decl) with
     | TyCon ((con, vars), dcons) ->
       let dcon_to_string (dcon, typs) = 
-        sprintf "%s %s" (con_to_string dcon)
+        sprintf "%s %s" (dcon_to_string dcon)
                         (concat_map " " typ_to_string typs)
       in
       sprintf "datatype %s %s = {%s}" 
-              (con_to_string con)
-              (concat_map " " var_to_string vars)
+              (tycon_to_string con)
+              (concat_map " " tvar_to_string vars)
               (concat_map "|" dcon_to_string dcons)
     | Alias ((con, vars), typ) -> 
       sprintf "type %s %s = %s" 
-              (con_to_string con)
-              (concat_map " " var_to_string vars)
+              (tycon_to_string con)
+              (concat_map " " tvar_to_string vars)
               (typ_to_string typ)
     | Annot (var, t) -> var_to_string var ^ " :: " ^ typ_to_string t
     | Pat   (pat, e) -> 
@@ -410,10 +469,10 @@ struct
     | Literal lit  -> lit_to_string lit
     | List pats   -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
     | Tuple pats  -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
-    | Ctor (qcon, pats) -> 
+    | Con (qdcon, pats) -> 
       match pats with 
-      | [] -> qcon_to_string qcon
-      | _ -> sprintf "%s of %s" (qcon_to_string qcon)  (concat_map " " pat_to_string pats)
+      | [] -> qdcon_to_string qdcon
+      | _ -> sprintf "%s of %s" (qdcon_to_string qdcon)  (concat_map " " pat_to_string pats)
 
   and op_to_string = function 
     | PLUS  -> "+"
@@ -447,7 +506,7 @@ struct
       | Record field_es    -> 
         let record_field (f, e) = field_to_string f ^ " = " ^ pp e in
         surround ("<{", "}>") @@ (concat_map ";" record_field field_es)
-      | Con (qcon, es)     -> qcon_to_string qcon ^ concat_map " " pp es
+      | Con (qdcon, es)    -> qdcon_to_string qdcon ^ concat_map " " pp es
       | Var qvar           -> qvar_to_string qvar
       | Literal lit        -> lit_to_string lit
     in 
@@ -458,9 +517,9 @@ struct
 
   and typ_to_string typ = 
     match Node.elem typ with 
-    | TVar tvar -> Node.elem tvar |> TVarId.to_string
+    | TVar tvar -> Node.fold_elem TVarId.to_string tvar
     | Unit -> "()"
-    | TyCon c -> qcon_to_string c
+    | TyCon c -> qtycon_to_string c
     | Arrow (t1, t2) -> typ_to_string t1 ^ " -> " ^ typ_to_string t2
     | TApp (t1, t2) -> typ_to_string t1 ^ " " ^ typ_to_string t2
     | Tuple typs -> surround ("(", ")") @@ concat_map ", " typ_to_string typs
@@ -471,42 +530,8 @@ struct
        field_to_string field ^ ": " ^ typ_to_string typ
     in
     match row with 
-    | RVar rvar -> Node.elem rvar |> RVarId.to_string
+    | RVar rvar -> Node.fold_elem TVarId.to_string rvar
     | Extension (r, fields) ->
       sprintf "%s & %s" (row_to_string r) (concat_map ", " field_to_string fields)
     | Fields fields -> concat_map ", " field_to_string fields
-
-  and qcon_to_string qcon =
-    let QCon (path, con) = Node.elem qcon in
-    match Option.map path_to_string path with 
-    | Some path_str -> path_str ^ "." ^ con_to_string con
-    | None -> con_to_string con
-
-  and qvar_to_string qvar = 
-    let QVar (path, var) = Node.elem qvar in
-    match Option.map path_to_string path with 
-    | Some path_str -> path_str ^ "." ^ var_to_string var
-    | None -> var_to_string var
-
-  and path_to_string path : string = 
-    let rec to_string p = 
-      match p with 
-      | Just con -> ConId.to_string con
-      | More (con, p) -> ConId.to_string con ^ "." ^ to_string p
-    in to_string (Node.elem path) 
-
-  and field_to_string field = 
-    FieldId.to_string (Node.elem field)
-
-  and lit_to_string lit = 
-    match Node.elem lit with
-    | Int s    -> s
-    | Float s  -> s
-    | String s -> surround ("\"", "\"") s
-
-  and var_to_string var = 
-    VarId.to_string (Node.elem var)
-
-  and con_to_string con = 
-    ConId.to_string (Node.elem con)
 end

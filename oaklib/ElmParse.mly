@@ -17,10 +17,11 @@ struct
   let pat  n pos : pat'  = node n pos
 
   (* Identifiers *)
-  let var name pos  : var'  = node (VarId.of_string name) pos
-  let tvar name pos : tvar' = node (TVarId.of_string name) pos
-  let rvar name pos : rvar' = node (RVarId.of_string name) pos
-  let con name pos  : con'  = node (ConId.of_string name) pos
+  let var name pos   : var'   = node (VarId.of_string name) pos
+  let tvar name pos  : tvar'  = node (TVarId.of_string name) pos
+  let mcon name pos  : mcon'  = node (MConId.of_string name) pos
+  let tycon name pos : tycon' = node (TyConId.of_string name) pos
+  let dcon name pos  : dcon'  = node (DConId.of_string name) pos
   
   let id_var var      : exposing_ident = Var var
   let id_tycon con    : exposing_ident = TyCon con
@@ -28,8 +29,9 @@ struct
 
   let field name pos : field' = node (FieldId.of_string name) pos
 
-  let qvar (path, var) pos : qvar'  = node (QVar (path, var)) pos
-  let qcon (path, con) pos : qcon'  = node (QCon (path, con)) pos
+  let qvar   (path, var) pos : qvar'   = node (QVar (path, var)) pos
+  let qtycon (path, con) pos : qtycon' = node (QTyCon (path, con)) pos
+  let qdcon  (path, con) pos : qdcon'  = node (QDCon (path, con)) pos
 
    (* This funcstion does a few things 
     * - Break the string into tokens using lexer assuming some token pos
@@ -52,8 +54,8 @@ struct
 
   let rec module_path cons = 
       match cons with 
-      | [Tokens.CONID con]       -> Just (ConId.of_string con)
-      | (Tokens.CONID con)::cons -> More (ConId.of_string con, module_path cons)
+      | [Tokens.CONID con]       -> Just (MConId.of_string con)
+      | (Tokens.CONID con)::cons -> More (MConId.of_string con, module_path cons)
       | _ -> assert false
 
   let parse_modid (s : string) (pos : pos) : path' =
@@ -62,22 +64,24 @@ struct
       |> Core.List.map ~f:fst
       |> module_path
     in node path pos
+
+  let parse_qid fid fqid (s : string) (pos : pos) =
+    let (cons, poss, (id_tok, id_pos)) = parse_qualified s pos in
+    let path_node = node (module_path cons) (List.hd poss, List.hd (List.rev poss)) in
+    match id_tok with 
+    | Tokens.VARID id
+    | Tokens.CONID id -> 
+      fqid (Some path_node, fid id id_pos) pos
+    | _ -> assert false
       
   let parse_qvar (s : string) (pos : pos) : qvar' = 
-    let (cons, poss, (id_tok, id_pos)) = parse_qualified s pos in
-    let path_node = node (module_path cons) (List.hd poss, List.hd (List.rev poss)) in
-    match id_tok with 
-    | Tokens.VARID varid -> 
-      node (QVar (Some path_node, var varid id_pos)) pos
-    | _ -> assert false
+    parse_qid var qvar s pos
 
-  let parse_qcon (s : string) (pos : pos) : qcon' = 
-    let (cons, poss, (id_tok, id_pos)) = parse_qualified s pos in
-    let path_node = node (module_path cons) (List.hd poss, List.hd (List.rev poss)) in
-    match id_tok with 
-    | Tokens.CONID varid -> 
-      node (QCon (Some path_node, con varid id_pos)) pos
-    | _ -> assert false
+  let parse_qdcon (s : string) (pos : pos) : qdcon' = 
+    parse_qid dcon qdcon s pos
+
+  let parse_qtycon (s : string) (pos : pos) : qtycon' = 
+    parse_qid tycon qtycon s pos
 
   (* Operator intermediate value *)
   let op2expr op e1 e2 = Infix (op, e1, e2) 
@@ -87,11 +91,11 @@ struct
   (* Intermediate values for atomic constructors 
   * This is needed because those constructors, though syntatically sharing the same node
   * can either serve as a value in an expresion, or an atomic pattern *)
-  type gcon = | Unit | EmptyList | QCon of qcon'
+  type gcon = | Unit | EmptyList | QDCon of qdcon'
 
   let gcon2pat g : pat =
     match g with 
-    | QCon c    -> Ctor (c, [])
+    | QDCon c   -> Con (c, [])
     | Unit      -> Unit
     | EmptyList -> EmptyList
 
@@ -99,7 +103,7 @@ struct
     match g with 
     | Unit       -> Unit
     | EmptyList  -> List []
-    | QCon c     -> Con (c, [])
+    | QDCon c    -> Con (c, [])
 
   let mod_decl   (con, exposings) _ = (MDecl (con, exposings))
   let mod_import (qcon, as_con, exposings) _ = (Import (qcon, as_con, exposings))
@@ -176,18 +180,18 @@ main:
 | LDELIM body RDELIM                                                                { Module.Mod (None, fst $2, snd $2) }
 
 module_decl :
-| MODULE c=CONID                                                                    { mod_decl (con c $loc(c), None)    $loc }
-| MODULE c=CONID exposing                                                           { mod_decl (con c $loc(c), Some $3) $loc }
+| MODULE c=CONID                                                                    { mod_decl (mcon c $loc(c), None)    $loc }
+| MODULE c=CONID exposing                                                           { mod_decl (mcon c $loc(c), Some $3) $loc }
 
 body:
 | impdecl SEMI body                                                                 { add_import $3 $1 }
 | separated_list(SEMI, topdecl)                                                     { mod_decls $1     }
 
 impdecl:
-| IMPORT qc=modid as_con=option(as_con) ex=option(exposing)                          { mod_import (qc, as_con, ex) $loc} 
+| IMPORT qc=modid as_con=option(as_con) ex=option(exposing)                         { mod_import (qc, as_con, ex) $loc} 
 
 as_con:
-| AS CONID                                                                          { con $2 $loc             }
+| AS CONID                                                                          { mcon $2 $loc             }
 
 exposing:
 | EXPOSING LPAREN DOTDOT RPAREN                                                     { Module.Any              }
@@ -219,10 +223,10 @@ typdecl:
 | TYPE simpletype EQ separated_nonempty_list(BAR, constr)                           { node (Decl.TyCon ($2, $4)) $loc }
 
 simpletype:
-| tycon list(var)                                                                   { ($1, $2)           }
+| tycon list(tvar)                                                                  { ($1, $2)           }
 
 constr:
-| tycon list(atype)                                                                 { ($1, $2)           }
+| dcon list(atype)                                                                  { ($1, $2)           }
 
 // type is an OCaml keyword
 // Function type
@@ -252,7 +256,7 @@ gtycon:
 */
 
 row : 
-| rvar                                                                              { Typ.RVar $1                    } 
+| tvar                                                                              { Typ.RVar $1                    } 
 | row BAR fields                                                                    { Typ.Extension ($1, $3)         }
 | fields                                                                            { Typ.Fields $1                  }
 
@@ -327,7 +331,7 @@ aexp :
 gcon:
 | LPAREN RPAREN                                                                     { Unit               }
 | LKET   RKET                                                                       { EmptyList          }
-| qcon                                                                              { QCon $1            }
+| qdcon                                                                             { QDCon $1           }
 
 // Casing branches
 alt:
@@ -354,7 +358,7 @@ pat:
 lpat: 
 // | apat                                                                              { pat (Pattern.Any) $loc }                                
 | apat                                                                              { $1 }                                
-| qcon nonempty_list(apat)                                                          { pat (Pattern.Ctor ($1, $2))  $loc }
+| qdcon nonempty_list(apat)                                                         { pat (Pattern.Con ($1, $2))   $loc }
 
 apat:
 | var                                                                               { pat (Pattern.Var $1)         $loc }
@@ -370,33 +374,33 @@ apat:
 
 // Identifiers 
 id:
-| VARID                                                                             { id_var (var $1 $loc)         }
-| CONID                                                                             { id_abstycon (con $1 $loc)              }
-| CONID LPAREN DOTDOT RPAREN                                                        { id_tycon (con $1 $loc)            }
-
-var:
-| VARID                                                                             { var $1 $loc }
+| var                                                                               { id_var $1                         }
+| tycon                                                                             { id_abstycon $1                    }
+| tycon LPAREN DOTDOT RPAREN                                                        { id_tycon $1                       }
 
 tvar:
 | VARID                                                                             { tvar $1 $loc }
 
-rvar:
-| VARID                                                                             { rvar $1 $loc }
-
 fieldid:
 | VARID                                                                             { field $1 $loc }
 
-tycon:
-| CONID                                                                             { con $1 $loc }
+var:
+| VARID                                                                             { var $1 $loc }
 
-qtycon:
-| qconid                                                                            { $1 }
+tycon:
+| CONID                                                                             { tycon $1 $loc }
+
+dcon:
+| CONID                                                                             { dcon $1 $loc }
 
 qvar:
 | qvarid                                                                            { $1 }
 
-qcon:
-| qconid                                                                            { $1 }
+qtycon:
+| qtyconid                                                                          { $1 }
+
+qdcon:
+| qdconid                                                                           { $1 }
 
 // literals
 literal:
@@ -404,15 +408,18 @@ literal:
 | FLOATCONST                                                                        { node (Literal.Float $1)  $loc }
 | STRCONST                                                                          { node (Literal.String $1) $loc }
 
-// ========= "Inlined" lexical syntax ========== 
 modid:
 | QCONID                                                                            { parse_modid $1 $loc }
 | CONID                                                                             { parse_modid $1 $loc }
 
-qconid:
-| QCONID                                                                            { parse_qcon $1 $loc            }
-| CONID                                                                             { qcon (None, con $1 $loc) $loc }
+qdconid:
+| QCONID                                                                            { parse_qdcon $1 $loc            }
+| dcon                                                                              { qdcon (None, $1) $loc          }
+
+qtyconid:
+| QCONID                                                                            { parse_qtycon $1 $loc           }
+| tycon                                                                             { qtycon (None, $1) $loc         }
 
 qvarid:
-| QVARID                                                                            { parse_qvar $1 $loc            }
-| VARID                                                                             { qvar (None, var $1 $loc) $loc }
+| QVARID                                                                            { parse_qvar $1 $loc             }
+| var                                                                               { qvar (None, $1) $loc           }

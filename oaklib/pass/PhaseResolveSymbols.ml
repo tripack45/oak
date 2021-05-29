@@ -46,14 +46,13 @@ type tycon_exposure =
 module Map = Core.Map.Poly
 module Set = Core.Set.Poly
 
-module ConId = ElAst.ConId
+module TVarId  = ElAst.TVarId
+module DConId  = ElAst.DConId
+module TyConId = ElAst.TyConId
+module MConId  = ElAst.MConId
 
 let as_resolved_path (path : P.path') : R.path' =
   Node.map_attr Option.some path
-
-let as_dconid conid = DConId.of_string (ConId.to_string conid)
-let as_tyconid conid = TyConId.of_string (ConId.to_string conid)
-let as_tvarid varid = TVarId.of_string (VarId.to_string varid)
 
 (* TyCons and DCons must use separate map because they live in different 
  * namespaces, hence name collisions between them would be bad. Consider this:
@@ -112,11 +111,11 @@ let resolve_ident ~unpack map ctx qid =
 let resolve_var ((_,  _, fvar_map): dicts) (vctx : vctx) (qvar : P.qvar') =
   resolve_ident fvar_map vctx qvar ~unpack:(fun (P.QVar (p, v)) -> (p, v)) 
 
-let resolve_dcon ((_,  dcon_map, _): dicts) (dctx : dctx) (qcon : P.qcon') =
-  resolve_ident dcon_map dctx qcon ~unpack:(fun (P.QCon (p, c)) -> (p, Node.map_elem as_dconid c)) 
+let resolve_dcon ((_,  dcon_map, _): dicts) (dctx : dctx) (qcon : P.qdcon') =
+  resolve_ident dcon_map dctx qcon ~unpack:(fun (P.QDCon (p, c)) -> (p, c)) 
 
-let resolve_tycon ((tycon_map,  _, _): dicts) (tctx : tctx) (qtycon : P.qcon') =
-  resolve_ident tycon_map tctx qtycon ~unpack:(fun (P.QCon (p, c)) -> (p, Node.map_elem as_tyconid c )) 
+let resolve_tycon ((tycon_map,  _, _): dicts) (tctx : tctx) (qtycon : P.qtycon') =
+  resolve_ident tycon_map tctx qtycon ~unpack:(fun (P.QTyCon (p, c)) -> (p, c)) 
 
 
 (* Applies a sigmask to a signature *)
@@ -198,7 +197,7 @@ let exposing_to_sigmask ~default (exposing_opt : P.exposing option) : R.sigmask 
         | P.AbsTyCon con 
         | P.TyCon con ->    
           let tycon : R.Sig.sigmask_tycon = 
-            R.Sig.Enumerated (Node.map_elem as_tyconid con, []) 
+            R.Sig.Enumerated (con, []) 
           in Some tycon
         | P.Var _ -> None
       in
@@ -252,7 +251,7 @@ let rec collect_binders_node (pat : P.pat') : (VarId.t R.node) list =
   | P.Any | P.Unit | P.EmptyList | P.Literal _ -> []
   | P.List pats  -> List.concat (List.map pats ~f:collect_binders_node)
   | P.Tuple pats -> List.concat (List.map pats ~f:collect_binders_node)
-  | P.Ctor (_, pats) -> List.concat (List.map pats ~f:collect_binders_node)
+  | P.Con (_, pats) -> List.concat (List.map pats ~f:collect_binders_node)
   | P.Var v -> [v]
 
 let collect_binders (pat : P.pat') : VarId.t list =
@@ -278,7 +277,7 @@ let rec translate_pat ((_tctx, dctx, vctx) as ctx) (dicts : dicts) (pat : P.pat'
   | P.List pats   -> pat_node @@ R.List  (List.map pats ~f:tr)
   | P.Tuple pats  -> pat_node @@ R.Tuple (List.map pats ~f:tr)
   | P.Var v       -> pat_node @@ R.Var (lookup_binder vctx v)
-  | P.Ctor (qcon, pats) -> 
+  | P.Con (qcon, pats) -> 
     let con' = resolve_dcon dicts dctx qcon in
     pat_node @@ R.Con (con', List.map pats ~f:tr)
 
@@ -366,18 +365,20 @@ let rec translate_expr ((tctx, dctx, vctx) as ctx) dicts (expr : P.expr') =
 and translate_decls (tctx, dctx, vctx) dicts decls =
 
   let translate_tycons (tctx, dctx) tycons =
+    let tycon_prefix = TyConId.of_string "T" in
+    let dcon_prefix  = DConId.of_string "D" in
     let (tctx', dctx') = 
       List.fold_left decls ~init:(tctx, dctx) ~f:(
         fun (tctx, dctx) (decl : P.decl') ->
           match Node.elem decl with 
           | P.Alias ((con, _), _) ->
-            let tctx' = Map.add_exn tctx ~key:(Node.elem con |> as_tyconid) ~data:(TyCon.fresh ~id:"T" ()) in
+            let tctx' = Map.add_exn tctx ~key:(Node.elem con) ~data:(TyCon.fresh ~id:tycon_prefix ()) in
             (tctx', dctx)
           | P.TyCon ((con, _), ctors) ->
-            let tctx' = Map.add_exn tctx ~key:(Node.elem con |> as_tyconid) ~data:(TyCon.fresh ~id:"T" ()) in
+            let tctx' = Map.add_exn tctx ~key:(Node.elem con) ~data:(TyCon.fresh ~id:tycon_prefix ()) in
             let dctx' = List.fold_left ctors ~init:dctx ~f:(
               fun dctx (con, _) -> 
-                Map.add_exn dctx ~key:(Node.elem con |> as_dconid) ~data:(DCon.fresh ~id:"D" ())
+                Map.add_exn dctx ~key:(Node.elem con) ~data:(DCon.fresh ~id:dcon_prefix ())
             ) in
             (tctx', dctx')
           | _ -> (tctx, dctx)
@@ -389,19 +390,17 @@ and translate_decls (tctx, dctx, vctx) dicts decls =
         fun tycon ->
           match Node.elem tycon with
           | P.Alias ((con, tvars), typ) ->
-            let con' = lookup_binder tctx' (Node.map_elem as_tyconid con) in
-            let tvars' = List.map tvars ~f:(Node.map_elem as_tvarid) in
-            Option.some @@ R.Alias ((con', tvars'), translate_typ ctx' dicts typ)
+            let con' = lookup_binder tctx' con in
+            Option.some @@ R.Alias ((con', tvars), translate_typ ctx' dicts typ)
           | P.TyCon ((con, tvars), ctors) ->
-            let con' = lookup_binder tctx' (Node.map_elem as_tyconid con) in
-            let tvars' = List.map tvars ~f:(Node.map_elem as_tvarid) in
+            let con' = lookup_binder tctx' con in
             let ctors' = List.map ctors ~f:(
               fun (dcon, typs) -> 
-                let dcon' = lookup_binder dctx' (Node.map_elem as_dconid dcon) in
+                let dcon' = lookup_binder dctx' dcon in
                 let typs' = List.map ~f:(translate_typ ctx' dicts) typs in
                 (dcon', typs')
             ) in
-            Option.some @@ R.TyCon ((con', tvars'), ctors')
+            Option.some @@ R.TyCon ((con', tvars), ctors')
           | _ -> None
       )
     in (tctx', dctx', tycons')
@@ -455,13 +454,12 @@ let infersig_from_decls (decls : P.decl' list) =
     List.fold_right decls ~init:([], []) ~f:(
       fun decl (sig_tycons, sig_vals) -> 
         match Node.elem decl with 
-        | P.TyCon ((con, _), ctors) -> 
-          let tyconid' = Node.map_elem as_tyconid con in
-          let dconids' = List.map ctors ~f:(fun (con, _) -> Node.map_elem as_dconid con) in
-          let sig_tycons' = (tyconid', dconids')::sig_tycons in
+        | P.TyCon ((tyconid, _), ctors) -> 
+          let dconids' = List.map ctors ~f:fst in
+          let sig_tycons' = (tyconid, dconids')::sig_tycons in
           (sig_tycons', sig_vals)
         | P.Alias ((con, _), _) -> 
-          let sig_tycons' = (Node.map_elem as_tyconid con, [])::sig_tycons in
+          let sig_tycons' = (con, [])::sig_tycons in
           (sig_tycons', sig_vals)
         | P.Annot _ -> (sig_tycons, sig_vals)
         | P.Pat (pat, _) -> (sig_tycons, collect_binders_node pat @ sig_vals)
