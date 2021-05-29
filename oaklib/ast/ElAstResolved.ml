@@ -4,22 +4,27 @@
 module Node    = ElAst.Node
 
 module VarId   = ElAst.VarId
+module TVarId  = ElAst.TVarId
+module RVarId  = ElAst.RVarId
 module TyConId = ElAst.Ident ()
 module DConId  = ElAst.Ident ()
+
+module type BINDER = 
+sig
+  type t  (* Abstract type for the binder *)
+  type id (* A associated human readable id for the binder *)
+  val fresh : ?id:id -> unit -> t
+  val id : t -> id option
+  val to_cannonical_string : string -> t -> string
+  val to_string_exn : t -> string
+  val compare : t -> t -> int
+end
 
 (* We can have multiple variable "namespaces" if we want. 
  * Each instantiation of this functor gives us a separate, independent
  * namespace of variables. *)
-module VarMake (M : sig type t end) () : 
-sig
-  type t 
-  type id = M.t
-  val fresh : ?id:id -> unit -> t
-  val id : t -> M.t option
-  val to_cannonical_string : string -> t -> string
-  val compare : t -> t -> int
-end =
-struct 
+module VarMake (M : ElAst.IDENT) () : BINDER with type id = M.t 
+= struct 
   open Core
 
   type t = int
@@ -38,8 +43,13 @@ struct
   let id t = Int.Map.find !map t
 
   let to_cannonical_string prefix t = prefix ^ Int.to_string t
+
+  let to_string_exn t = 
+    (Core.Option.value_exn (id t) |> M.to_string) ^ Int.to_string t
+
   let compare = Int.compare
 end
+
 
 (* Type constructors and data constructors, though following the same syntax 
  * are in their own independent namespaces, therefore needs to be tracked separately. 
@@ -58,63 +68,96 @@ struct
   type pos = Lexing.position * Lexing.position
 
   (* A regular AST node encodes source file location *)
-  type 'a node     = ('a, pos) Node.t
+  type 'a node = 'a ElAst.Syntax.node
 
-  type bvar   = Var.t
-  type bdcon  = DConId.t
-  type btycon = TyCon.t
   type field  = ElAst.Syntax.field
   type lit    = ElAst.Syntax.lit
   type path   = ElAst.Syntax.path
+  type tvar   = ElAst.Syntax.tvar
+  type rvar   = ElAst.Syntax.rvar
 
-  type bvar'   = Var.t node 
-  type bdcon'  = DConId.t node
-  type btycon' = TyCon.t node
   type field'  = field node
   type lit'    = lit node
   type path'   = (path, pos option) Node.t
+  type tvar'   = tvar node
+  type rvar'   = rvar node
 
-  type 'id free = 
-     | Resolved   of path' * 'id
-     | Unresolved of 'id
+  (* Identifiers involves a few similar but different concepts.
+   * 
+   * - *id types represents the type of the identifier name, i.e, an abstracted 
+   *   notion of string. Using this abstract notion allows us to introduce checks 
+   *   on name validity, and prevents assigning names of tcons to dcons for example.contents
+   *
+   * - var/dcon/tycon represent a value/data ctor/type ctor variable. They are variables in the 
+   *   mathematical/type theoretic sense, serving as references to their point of definitions. 
+   *   The introduction of this type gives a fresh name to each definition, resolving all shadowing.
+   *
+   * - *ref types represents references this to variable/dcon/tycon-like things.
+   *)
+  type ('binder, 'id) twin = 'binder * 'id
+  type ('binder, 'id) twin' =  ('binder, 'id) twin node
+  type ('binder, 'id) ident_ref = 
+      | Bind of ('binder, 'id) twin'
+      | Free of path' * 'id node
+      | Unresolved of 'id node
+  type ('binder, 'id) ident_ref' = ('binder, 'id) ident_ref node
 
-  type fvar = (VarId.t node) free
-  type var = 
-     | BVar of bvar'
-     | FVar of fvar
+  type varid  = VarId.t
+  type dconid = TyConId.t
+  type tyconid = DConId.t
 
-  type fdcon = (DConId.t node) free
-  type dcon = 
-     | BDCon of bdcon'
-     | FDCon of fdcon
+  type varid'  = varid node
+  type dconid' = dconid node
+  type tyconid' = tyconid node
 
-  type ftycon = (DConId.t node) free
-  type tycon = 
-     | BTyCon of btycon'
-     | FTyCon of ftycon
+  type var   = (Var.t, VarId.t) twin 
+  type dcon  = (DCon.t, DConId.t) twin
+  type tycon = (TyCon.t, TyConId.t) twin
+
+  type var'   = var node 
+  type dcon'  = dcon node
+  type tycon' = tycon node
+
+  type varref   = (Var.t, VarId.t) ident_ref
+  type dconref  = (DCon.t, DConId.t) ident_ref
+  type tyconref = (TyCon.t, TyConId.t) ident_ref
+
+  type varref'   = varref node
+  type dconref'  = dconref node
+  type tyconref' = tyconref node
 
   type pat = 
-    | Var        of bvar'
+    | Var        of var'
     | Any
     | Unit 
     | EmptyList
     | Literal    of lit'
     | List       of pat node list
     | Tuple      of pat node list
-    | Con        of dcon node * (pat node list)
+    | Con        of dconref' * (pat node list)
 
   type pat' = pat node
 
-  (* TODO: implement TyCon resolution *)
-  type typ  = ElAst.Syntax.typ
-  type typ' = ElAst.Syntax.typ node
+  (* TODO: implement tvar/rvar resolution *)
+  and typ = 
+    | TVar   of tvar'
+    | Unit
+    | TyCon  of tyconref'
+    | Arrow  of typ' * typ'
+    | TApp   of typ' * typ'
+    | Record of row
+    | Tuple  of typ' list
+
+  and row = 
+    | RVar      of rvar'
+    | Extension of row * (field' * typ') list
+    | Fields    of (field' * typ') list
+
+  and typ' = typ node
+
   type op   = ElAst.Syntax.op
 
-  type annot = var node * typ node 
-
-  type typdecl = 
-    | TyCon
-    | Alias
+  type annot = var' * typ' 
 
   type expr = 
     (* Control flow constructs *)
@@ -132,17 +175,21 @@ struct
     | List       of expr' list  (* >= 0 elements *)
     | Record     of (field' * expr') list
     (* Data construction *)
-    | Con        of dcon node * (expr' list)
+    | Con        of dconref' * (expr' list)
     (* Identifier refernce *)
-    | Var        of var node
+    | Var        of varref'
     (* Literals *)
     | Literal    of lit'
 
   and expr' = expr node
 
+  and typdecl = 
+    | TyCon of (tycon' * tvar' list) * ((dcon' * typ' list) list)
+    | Alias of (tycon' * tvar' list) * typ'
+
   and decl =
     | Pat   of annot list * pat' * expr'
-    | Fun   of annot option * (bvar' * (pat' list)) * expr'
+    | Fun   of annot option * (var' * (pat' list)) * expr'
 
   (* This module introduces "signature" ("sigt") and "signature mask" ("sigmask") 
    * 
@@ -185,8 +232,8 @@ struct
     imports : (path' * sigmask) list;
     (* TopLevel decls needs to keep track of field name because they are exported, 
      * In particular, a single val definition can export multiple names *)
-    tycons  : ((TyConId.t * TyCon.t) * typdecl) list;
-    vals    : ((VarId.t   * Var.t) list * decl) list;
+    tycons  : typdecl list;
+    vals    : decl list;
   }
 end
 
@@ -211,28 +258,44 @@ struct
       | More (con, p) -> ElAst.ConId.to_string con ^ "." ^ to_string p
     in to_string (Node.elem path) 
 
+  let binded_to_string id_to_string binder_to_string binded_node =
+    let (binder, id) = Node.elem binded_node in
+    "~" ^ id_to_string id ^ ":" ^ binder_to_string binder
+
+  let var_to_string (v : var') = 
+    binded_to_string VarId.to_string Var.to_string_exn v
+  let dcon_to_string (d : dcon') = 
+    binded_to_string DConId.to_string DCon.to_string_exn d
+  let tycon_to_string (t : tycon') = 
+    binded_to_string TyConId.to_string TyCon.to_string_exn t
+  let tvar_to_string (t : tvar') = ElAst.TVarId.to_string (Node.elem t)
+
+  let ref_to_string twin_to_string id_to_string ident : string =
+    match Node.elem ident with 
+    | Bind bvar -> twin_to_string bvar 
+    | Free (path, id) -> path_to_string path ^ "." ^ id_to_string (Node.elem id)
+    | Unresolved id -> "?." ^ id_to_string (Node.elem id)
+
+  let varref_to_string (var : varref') = 
+    ref_to_string var_to_string VarId.to_string var
+
+  let dconref_to_string (dcon : dconref') = 
+    ref_to_string dcon_to_string DConId.to_string dcon
+
+  let tyconref_to_string (tycon : tyconref') = 
+    ref_to_string tycon_to_string TyConId.to_string tycon
+
   let rec m_to_string ({ modid; exports; imports; tycons; vals } : m) =
     let tycons_strings = 
-      assert (List.is_empty tycons); 
-      ["(* Unimplemented *)"] 
+      List.map tycons ~f:(fun tycon -> sprintf "TyCon %s" (typdecl_to_string tycon))
     in
     let vals_strings = 
-      List.map vals ~f:(
-        fun (ids, val_decl) ->
-          let ids_strs = 
-            List.map ids ~f:(
-              fun (id, var) -> 
-                "~" ^ VarId.to_string id ^ ":" ^ Var.to_cannonical_string "x" var
-            )
-            |> String.concat ~sep:", "
-            |> surround ("(", ")") in
-          sprintf "Val %s : %s" ids_strs (val_to_string val_decl)
-      )
+      List.map vals ~f:(fun val_decl -> sprintf "Val %s" (decl_to_string val_decl))
     in
-    sprintf ("let {%s} in %s : sig {%s} = struct {tycons {%s};vals {%s}}") 
-            (String.concat ~sep:";" @@ imports_to_strings imports)
+    sprintf ("module %s : sig {%s} = let open {%s} in struct {tycons {%s};vals {%s}}") 
             (Core.Option.value_map modid ~default:"?" ~f:path_to_string)
             (sigt_to_string exports)
+            (String.concat ~sep:";" @@ imports_to_strings imports)
             (String.concat ~sep:";" tycons_strings)
             (String.concat ~sep:";" vals_strings)
   
@@ -275,10 +338,23 @@ struct
         sprintf "%s : Opening {%s}" path_str sig_str
     )
 
-  and tycon_to_string _tycon : string = 
-    assert false
+  and typdecl_to_string typdecl: string = 
+    match typdecl with 
+    | TyCon ((tycon, tvars), ctors) ->
+      let ctor_to_string (dcon, typs) = 
+        sprintf "%s of %s" (dcon_to_string dcon)  (concat_map " " typ_to_string typs)
+      in
+      sprintf "(%s) %s = {%s}" 
+              (tycon_to_string tycon)
+              (concat_map ", " tvar_to_string tvars)
+              (concat_map "|" ctor_to_string ctors)
+    | Alias ((tycon, tvars), typ) ->
+      sprintf "(%s) %s = {%s}" 
+              (tycon_to_string tycon)
+              (concat_map ", " tvar_to_string tvars)
+              (typ_to_string typ)
 
-  and val_to_string valbind : string = 
+  and decl_to_string valbind : string = 
     (* Annotations are not supported yet *)
     match valbind with 
     | Pat (annots, pat, e) -> 
@@ -287,13 +363,13 @@ struct
     | Fun (annot, (f, pats), e) -> 
       assert (Option.is_none annot);
       sprintf "Fun %s %s = %s" 
-              (Var.to_cannonical_string "x" (Node.elem f))
+              (var_to_string f)
               (concat_map " " pat_to_string pats)
               (expr_to_string e)
       
   and pat_to_string (pat : pat') = 
     match Node.elem pat with
-    | Var var      -> Var.to_cannonical_string "x" (Node.elem var)
+    | Var var      -> var_to_string var
     | Any          -> "_"
     | Unit         -> "()"
     | EmptyList    -> "[]"
@@ -302,16 +378,36 @@ struct
     | Tuple pats   -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
     | Con (con, pats) -> 
       match pats with 
-      | [] -> dcon_to_string con
-      | _ -> sprintf "%s of %s" (dcon_to_string con)  (concat_map " " pat_to_string pats)
+      | [] -> dconref_to_string con
+      | _ -> sprintf "%s of %s" (dconref_to_string con)  (concat_map " " pat_to_string pats)
+
+  and typ_to_string (typ : typ') : string =
+    match Node.elem typ with 
+    | TVar tvar -> Node.elem tvar |> ElAst.TVarId.to_string
+    | Unit -> "()"
+    | TyCon c -> tyconref_to_string c
+    | Arrow (t1, t2) -> typ_to_string t1 ^ " -> " ^ typ_to_string t2
+    | TApp (t1, t2) -> typ_to_string t1 ^ " " ^ typ_to_string t2
+    | Tuple typs -> surround ("(", ")") @@ concat_map ", " typ_to_string typs
+    | Record row -> surround ("<", ">") @@ row_to_string row
+
+  and row_to_string (row : row) : string =
+    let field_to_string (field, typ) =
+       field_to_string field ^ ": " ^ typ_to_string typ
+    in
+    match row with 
+    | RVar rvar -> Node.elem rvar |> ElAst.RVarId.to_string
+    | Extension (r, fields) ->
+      sprintf "%s & %s" (row_to_string r) (concat_map ", " field_to_string fields)
+    | Fields fields -> concat_map ", " field_to_string fields
 
   and expr_to_string (e : expr') =
     let pp = expr_to_string in
     match Node.elem e with
     | Let ((tycons, vals), e)     -> 
-      let type_strings = List.map ~f:tycon_to_string tycons 
+      let type_strings = List.map ~f:typdecl_to_string tycons 
                       |> List.map ~f:(fun s -> "TyCon " ^ s) in
-      let vals_strings = List.map ~f:val_to_string vals 
+      let vals_strings = List.map ~f:decl_to_string vals 
                       |> List.map ~f:(fun s -> "Val " ^ s) in
       sprintf "let {%s} in %s" 
               (String.concat ~sep:";" (type_strings @ vals_strings)) 
@@ -330,20 +426,10 @@ struct
     | Record field_es    -> 
       let record_field (f, e) = field_to_string f ^ " = " ^ pp e in
       surround ("<{", "}>") @@ (concat_map ";" record_field field_es)
-    | Con (con, es)      -> dcon_to_string con ^ concat_map " " pp es
-    | Var (var)          -> var_to_string var
+    | Con (con, es)      -> dconref_to_string con ^ concat_map " " pp es
+    | Var (var)          -> varref_to_string var
     | Literal lit        -> lit_to_string lit
 
-  and var_to_string (var : var node) = 
-    match Node.elem var with 
-    | BVar bvar -> Var.to_cannonical_string "x" (Node.elem bvar)
-    | FVar (Resolved (path, id)) -> path_to_string path ^ "." ^ VarId.to_string (Node.elem id)
-    | FVar (Unresolved id) -> "?." ^ VarId.to_string (Node.elem id)
-
-  and dcon_to_string con = 
-    match Node.elem con with 
-    | BDCon dconid -> DConId.to_string (Node.elem dconid)
-    | FDCon (Resolved (path, id)) -> path_to_string path ^ "." ^ DConId.to_string (Node.elem id)
-    | FDCon (Unresolved id) -> "?." ^ DConId.to_string (Node.elem id)
+  
 
 end
