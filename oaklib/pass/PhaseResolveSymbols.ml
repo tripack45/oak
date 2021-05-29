@@ -43,8 +43,8 @@ type tycon_exposure =
   | Opaque
   | Transparent
 
-module Map = Core.Map.Poly
-module Set = Core.Set.Poly
+module Map = Core.Map
+module Set = Core.Set
 
 module TVarId  = ElAst.TVarId
 module DConId  = ElAst.DConId
@@ -63,10 +63,16 @@ let as_resolved_path (path : P.path') : R.path' =
  * In this example uses of Con can either be ModuleX.Con or ModuleY.Con, depending
  * whether Con is being used as a TyCon or a DCon
  *)
-type tycon_map = (TyConId.t, R.path) Map.t
-type dcon_map  = (DConId.t, R.path) Map.t
-type fvar_map  = (VarId.t, R.path) Map.t
-type dicts = tycon_map * dcon_map * fvar_map
+module CtxOpen =
+struct
+  type tctx = R.path TyConId.Map.t
+  type dctx = R.path DConId.Map.t
+  type vctx = R.path VarId.Map.t
+
+  type t = tctx * dctx * vctx
+
+  let empty = (TyConId.Map.empty, DConId.Map.empty, VarId.Map.empty)
+end
 
 (* tctx : Type Constructor Context
  * dctx : Data Constructor Context
@@ -79,9 +85,20 @@ type dicts = tycon_map * dcon_map * fvar_map
  * based on the type of the constructor inferred (or defaults to a choice). Therefore we must maintain 
  * name even for locally defined data constructors.
  *)
-type tctx = (TyConId.t, TyCon.t) Map.t
-type dctx = (DConId.t , DCon.t) Map.t
-type vctx = (VarId.t  , Var.t) Map.t
+
+module Ctx =
+struct
+  type tctx = TyCon.t TyConId.Map.t
+  type dctx = DCon.t  DConId.Map.t
+  type vctx = Var.t   VarId.Map.t
+
+  type t = tctx * dctx * vctx
+
+  let empty_tctx = TyConId.Map.empty
+  let empty_dctx = DConId.Map.empty
+  let empty_vctx = VarId.Map.empty
+  let empty : t = (empty_tctx, empty_dctx, empty_vctx)
+end
 
 let lookup_binder ctx id_node : ('binder, 'id) R.twin' =
   let (id, pos) = Node.both id_node in
@@ -108,15 +125,14 @@ let resolve_ident ~unpack map ctx qid =
       | None -> 
         Node.node (R.Unresolved id) pos
 
-let resolve_var ((_,  _, fvar_map): dicts) (vctx : vctx) (qvar : P.qvar') =
+let resolve_var ((_,  _, fvar_map): CtxOpen.t) vctx (qvar : P.qvar') =
   resolve_ident fvar_map vctx qvar ~unpack:(fun (P.QVar (p, v)) -> (p, v)) 
 
-let resolve_dcon ((_,  dcon_map, _): dicts) (dctx : dctx) (qcon : P.qdcon') =
+let resolve_dcon ((_,  dcon_map, _): CtxOpen.t) dctx (qcon : P.qdcon') =
   resolve_ident dcon_map dctx qcon ~unpack:(fun (P.QDCon (p, c)) -> (p, c)) 
 
-let resolve_tycon ((tycon_map,  _, _): dicts) (tctx : tctx) (qtycon : P.qtycon') =
+let resolve_tycon ((tycon_map,  _, _): CtxOpen.t) tctx (qtycon : P.qtycon') =
   resolve_ident tycon_map tctx qtycon ~unpack:(fun (P.QTyCon (p, c)) -> (p, c)) 
-
 
 (* Applies a sigmask to a signature *)
 let apply_sigmask (sigmask : R.sigmask) (sigt : R.sigt) : R.sigt =
@@ -127,7 +143,7 @@ let apply_sigmask (sigmask : R.sigmask) (sigt : R.sigt) : R.sigt =
     (* Values are pretty simple: every value appears in the mask must appear
      * in the source signatures, otherwise it's a failure *)
     let vals = 
-      let sig_val_map = List.fold sig_vals ~init:Map.empty ~f:(
+      let sig_val_map = List.fold sig_vals ~init:Ctx.empty_vctx ~f:(
         fun map node -> Map.add_exn map ~key:(Node.elem node) ~data:node
       ) in
       List.map mask_vals ~f:(fun varid_node -> Map.find_exn sig_val_map (Node.elem varid_node))
@@ -137,7 +153,7 @@ let apply_sigmask (sigmask : R.sigmask) (sigt : R.sigt) : R.sigt =
      * match the list of type constructors in the sig: it is not legal to expose only a subset
      * of type constructors of a type. *)
     let tycons = 
-      let sig_tycon_map = List.fold sig_tycons ~init:Map.empty ~f:(
+      let sig_tycon_map = List.fold sig_tycons ~init:Ctx.empty_tctx ~f:(
         fun map node -> Map.add_exn map ~key:(Node.elem @@ fst @@ node) ~data:node
       ) in
       List.map mask_tycons ~f:(
@@ -225,7 +241,7 @@ let sigt_to_dicst (tycon_map, dcon_map, fvar_map) (path, sigt)  =
         let tycon_map' = Map.add_exn tycon_map ~key:(Node.elem conid) ~data:(Node.elem path) in
         let dcon_map' = 
           List.fold dcons ~init:dcon_map ~f:(
-            fun (map : dcon_map) conid -> 
+            fun (map : CtxOpen.dctx) conid -> 
               Map.add_exn map ~key:(Node.elem conid) ~data:(Node.elem path)
           )
         in (tycon_map', dcon_map')
@@ -244,7 +260,7 @@ let imports_to_maps (imports : (R.path' * R.sigmask) list) =
     let sigt = sigmask_minimum_sig sigmask in
     sigt_to_dicst dicts (path, sigt)
   in
-  List.fold imports ~init:(Map.empty, Map.empty, Map.empty) ~f
+  List.fold imports ~init:CtxOpen.empty ~f
 
 let rec collect_binders_node (pat : P.pat') : (VarId.t R.node) list =
   match Node.elem pat with 
@@ -265,7 +281,7 @@ let bind_binders vctx varids =
       (vctx', (varid, bvar))
   )
 
-let rec translate_pat ((_tctx, dctx, vctx) as ctx) (dicts : dicts) (pat : P.pat') =
+let rec translate_pat ((_tctx, dctx, vctx) as ctx) dicts (pat : P.pat') =
   let (elem, pos) = Node.both pat in
   let pat_node (pat : R.pat) = Node.node pat pos in
   let tr = translate_pat ctx dicts in
@@ -281,7 +297,7 @@ let rec translate_pat ((_tctx, dctx, vctx) as ctx) (dicts : dicts) (pat : P.pat'
     let con' = resolve_dcon dicts dctx qcon in
     pat_node @@ R.Con (con', List.map pats ~f:tr)
 
-let rec translate_typ ((tctx, _, _) as ctx) (dicts : dicts) (typ : P.typ') =
+let rec translate_typ ((tctx, _, _) as ctx) dicts (typ : P.typ') =
   let (elem, pos) = Node.both typ in
   let tr = translate_typ ctx dicts in
   let translate_field (field, typ) = (field, tr typ) in
@@ -418,8 +434,8 @@ and translate_decls (tctx, dctx, vctx) dicts decls =
       List.map decls ~f: (
         fun decl ->  
           match Node.elem decl with 
-          | P.Fun ((f, _), e) -> [Node.elem f]
-          | P.Pat (pat, e) -> collect_binders pat
+          | P.Fun ((f, _), _) -> [Node.elem f]
+          | P.Pat (pat, _) -> collect_binders pat
           | _ -> []
       ) |> List.concat |> bind_binders vctx
       (* Create a variable for every binder *)
@@ -473,7 +489,7 @@ let resolve ~modpath ~export_dict (t : P.m) : R.m =
   let imports = resolve_imports ~export_dict imports in
   let (tycon_map, dcon_map, fvar_map) = imports_to_maps imports in
   let (_, (tycons', (vals' : R.decl list))) = 
-    translate_decls (Map.empty, Map.empty, Map.empty) (tycon_map, dcon_map, fvar_map) decls in
+    translate_decls Ctx.empty (tycon_map, dcon_map, fvar_map) decls in
   let m_sigmask = 
     match mdecl with 
     | None -> sigmask_any

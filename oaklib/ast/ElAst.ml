@@ -46,10 +46,13 @@ struct
 end 
 
 module type IDENT = sig
-  type t
+  type t 
   val of_string : string -> t
   val to_string : t -> string
   val compare : t -> t -> int
+
+  module Comparable : Core.Comparable.S with type t = t
+  module Map : Core.Map.S with type Key.t = t
 end
 
 module Ident () =
@@ -57,7 +60,10 @@ struct
   type t = string
   let of_string s = s
   let to_string t = t
-  let compare = String.compare
+
+  module Comparable = Core.String
+  module Map = Core.String.Map
+  let compare = Comparable.compare
 end
 
 module VarId : IDENT = Ident ()
