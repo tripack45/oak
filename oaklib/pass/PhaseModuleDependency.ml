@@ -9,8 +9,9 @@ module Map = Map.Poly
 type path_dict = (path, path) Map.t
 
 let expand_path_alias (Mod (mdecl, imports, decl_nodes)) = 
+  let preamble_dict = Map.of_alist_exn ElmCore.PathAlias.aliases in
   let (imported_paths, path_dict) = 
-    List.fold imports ~init:([], Map.empty) ~f:(
+    List.fold imports ~init:([], preamble_dict) ~f:(
       fun (paths, path_map) (Import (path_node, as_con_opt, _)) -> 
         let path = Node.elem path_node in
         let path_map' = 

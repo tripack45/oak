@@ -46,10 +46,10 @@ type tycon_exposure =
 module Map = Core.Map
 module Set = Core.Set
 
-module TVarId  = ElAst.TVarId
-module DConId  = ElAst.DConId
-module TyConId = ElAst.TyConId
-module MConId  = ElAst.MConId
+module TVarId  = ElAstResolved.TVarId
+module DConId  = ElAstResolved.DConId
+module TyConId = ElAstResolved.TyConId
+module MConId  = ElAstResolved.MConId
 
 let as_resolved_path (path : P.path') : R.path' =
   Node.map_attr Option.some path
@@ -228,10 +228,15 @@ let exposing_to_sigmask ~default (exposing_opt : P.exposing option) : R.sigmask 
 
 
 let resolve_imports ~export_dict (imports : P.import list) : (R.path' * R.sigmask) list =
-  List.map imports ~f:(
-    fun (P.Import (path, _, exposing_opt)) ->
-      (as_resolved_path path, exposing_to_sigmask ~default:sigmask_none exposing_opt)
-  )
+  let mod_imports = 
+    List.map imports ~f:(
+      fun (P.Import (path, _, exposing_opt)) ->
+        (as_resolved_path path, exposing_to_sigmask ~default:sigmask_none exposing_opt)
+    )
+  in 
+  let preambles = 
+    List.map ~f:(fun (p, sigmask) -> (Node.node p None, sigmask)) ElmCore.Preamble.preambles in
+  preambles @ mod_imports
 
 let sigt_to_dicst (tycon_map, dcon_map, fvar_map) (path, sigt)  =
   let (R.Sig.Sig (tycons, dcons)) = sigt in

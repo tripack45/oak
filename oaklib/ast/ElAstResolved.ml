@@ -8,6 +8,7 @@ module TVarId  = ElAst.TVarId
 module RVarId  = ElAst.TVarId
 module TyConId = ElAst.TyConId
 module DConId  = ElAst.DConId
+module MConId  = ElAst.MConId
 
 module type BINDER = 
 sig
@@ -72,7 +73,11 @@ struct
 
   type field  = ElAst.Syntax.field
   type lit    = ElAst.Syntax.lit
-  type path   = ElAst.Syntax.path
+
+  type path   = ElAst.Syntax.path = 
+    | Just of MConId.t
+    | More of MConId.t * path
+
   type tvar   = ElAst.Syntax.tvar
   type rvar   = tvar
 
