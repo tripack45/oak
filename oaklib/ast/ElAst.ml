@@ -47,23 +47,18 @@ end
 
 module type IDENT = sig
   type t 
+  [@@deriving compare, sexp]
   val of_string : string -> t
   val to_string : t -> string
-  val compare : t -> t -> int
 
-  module Comparable : Core.Comparable.S with type t = t
+  include Core.Comparator.S with type t := t
+
   module Map : Core.Map.S with type Key.t = t
 end
 
 module Ident () =
 struct 
-  type t = string
-  let of_string s = s
-  let to_string t = t
-
-  module Comparable = Core.String
-  module Map = Core.String.Map
-  let compare = Comparable.compare
+  include Core.String 
 end
 
 module VarId : IDENT = Ident ()
@@ -72,6 +67,41 @@ module MConId : IDENT = Ident () (* Path segement *)
 module TyConId : IDENT = Ident ()
 module DConId : IDENT = Ident ()
 module FieldId : IDENT = Ident ()
+
+module Path :
+sig
+  type t =
+    | Just of MConId.t
+    | More of MConId.t * t
+  [@@deriving compare, sexp]
+
+  val to_string : t -> string
+
+  include Core.Comparable.S_plain with type t := t
+
+  module Map : Core.Map.S with type Key.t = t
+end = struct
+  module T = 
+  struct 
+    module T_ = 
+    struct 
+      type t =
+        | Just of MConId.t
+        | More of MConId.t * t
+      [@@deriving compare, sexp]
+
+      let rec to_string = function 
+        | Just id -> MConId.to_string id
+        | More (id, path) -> MConId.to_string id ^ "." ^ to_string path
+    end
+    include T_
+    include Core.Comparable.Make_plain(T_)
+  end
+  
+  include T
+  module Comparable = T
+  module Map = Core.Map.Make(T)
+end
 
 (* Definitions of external language syntax elements *)
 module Syntax = 
@@ -113,7 +143,7 @@ struct
     | String of string
   type lit' = lit node
 
-  type path =
+  type path = Path.t =
     | Just of MConId.t
     | More of MConId.t * path
   type path' = path node

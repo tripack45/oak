@@ -4,9 +4,9 @@ open Core
 open ElAst
 open ElAst.Syntax
 
-module Map = Map.Poly
 
-type path_dict = (path, path) Map.t
+module Map = ElAst.Path.Map
+type path_dict = path Path.Map.t
 
 let expand_path_alias (Mod (mdecl, imports, decl_nodes)) = 
   let preamble_dict = Map.of_alist_exn ElmCore.PathAlias.aliases in
