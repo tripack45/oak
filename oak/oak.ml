@@ -29,17 +29,32 @@ let _ =
 
 module M = Core.Int.Map
 
+let to_path str = ElAst.Path.Just (ElAst.MConId.of_string str)
+
+let mods = 
+  [
+    (to_path "Stdin", Parse.parse_src src);
+  ]
+
+let () = print_endline "----- [Info] EL AST -----"
 let () = 
-  let m = Parse.parse_src src in
-  let () = print_endline "----- [Info] EL AST -----" in
-  let () = Parse.dump_with_layout @@ ElAst.ToString.m_to_string m in
-  let () = print_endline "----- [Phase] ResolveModuleDependency -----" in
-  let (_, m) = Pass.PhaseResolveModuleDependency.expand_path_alias m in
-  let () = Parse.dump_with_layout @@ ElAst.ToString.m_to_string m in
-  let () = print_endline "----- [Phase] ResolveSymbols -----" in
-  let m = Pass.PhaseResolveSymbols.resolve ~modpath:None ~export_dict:[] m in
-  let () = Parse.dump_with_layout @@ ElAstResolved.ToString.m_to_string m in
-  ()
+  Core.List.iter mods 
+    ~f:(fun (_, m) -> Parse.dump_with_layout @@ ElAst.ToString.m_to_string m) 
+
+let () = print_endline "----- [Phase] ResolveModuleDependency -----"
+let mods = Pass.PhaseResolveModuleDependency.run mods 
+        |> Core.Result.ok_exn
+        |> Core.List.map ~f:(fun (path, (_, m)) -> (path, m))
+let () = 
+  Core.List.iter mods 
+    ~f:(fun (_, m) -> Parse.dump_with_layout @@ ElAst.ToString.m_to_string m)
+
+let () = print_endline "----- [Phase] ResolveSymbols -----" 
+let mods = Pass.PhaseResolveSymbols.run mods
+let () = 
+  Core.List.iter mods 
+    ~f:(fun m -> Parse.dump_with_layout @@ ElAstResolved.ToString.m_to_string m)
+
 
 (* let () = 
     print_endline (String.make 20 '=');

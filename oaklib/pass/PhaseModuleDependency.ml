@@ -138,3 +138,16 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
   in
   let decl_nodes' = List.map ~f:(Node.map_elem resolve_decl) decl_nodes in
   (imported_paths, Mod (mdecl, imports, decl_nodes'))
+
+(* Implement algorithm to sort modules by reversed post order.
+ * If the mod dependencies does not form a cycle, an list of mods orded by rpo 
+ * is returned, otherwise at least one example of cyclic dependency is found are reporetd. 
+ *)
+let mods_dep_rpo mods = 
+  Result.Ok mods
+
+let run (mods : (Path.t * m) list) =
+  let path_expanded_mods = 
+    List.map mods ~f:(fun (path, m) -> (path, expand_path_alias m))
+  in
+  mods_dep_rpo path_expanded_mods

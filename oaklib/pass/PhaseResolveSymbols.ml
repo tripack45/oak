@@ -39,6 +39,8 @@ open Core
 module P = ElAst.Syntax
 module R = ElAstResolved.Syntax
 
+module Path = ElAst.Path
+
 type tycon_exposure = 
   | Opaque
   | Transparent
@@ -227,7 +229,7 @@ let exposing_to_sigmask ~default (exposing_opt : P.exposing option) : R.sigmask 
       R.Sig.Enumerated (tycons, vals)
 
 
-let resolve_imports ~export_dict (imports : P.import list) : (R.path' * R.sigmask) list =
+let resolve_imports (imports : P.import list) : (R.path' * R.sigmask) list =
   let mod_imports = 
     List.map imports ~f:(
       fun (P.Import (path, _, exposing_opt)) ->
@@ -258,11 +260,17 @@ let sigt_to_dicst (tycon_map, dcon_map, fvar_map) (path, sigt)  =
   in
   (tycon_map', dcon_map', fvar_map')
 
-let imports_to_maps (imports : (R.path' * R.sigmask) list) =
+let imports_to_sigs mctx (imports : (R.path' * R.sigmask) list) =
   let f dicts (path, sigmask) = 
-    (* If whole program is available, this step would be replaced by looking up signature of other modules
-     * then apply the signature mask to those signatures *)
-    let sigt = sigmask_minimum_sig sigmask in
+    let sigt = 
+      match Map.find mctx (Node.elem path) with 
+      | Some sigt -> apply_sigmask sigmask sigt
+        (* This would signify a reference to unknown module 
+        * We could opt to report an error, or took a conserverative approach to derive a signature
+        * by looking at the open clause. With absense of exposing(..) this still allows us get a lot of
+        * userful information and run quite a few analysis. *)
+      | None -> sigmask_minimum_sig sigmask 
+    in
     sigt_to_dicst dicts (path, sigt)
   in
   List.fold imports ~init:CtxOpen.empty ~f
@@ -489,10 +497,10 @@ let infersig_from_decls (decls : P.decl' list) =
   in R.Sig.Sig (sig_tycons, sig_vals)
 
 (* TODO: perform imported dictionary lookup *)
-let resolve ~modpath ~export_dict (t : P.m) : R.m = 
+let resolve_mod ~modpath mctx (t : P.m) : R.m = 
   let (P.Mod (mdecl, imports, decls)) = t in
-  let imports = resolve_imports ~export_dict imports in
-  let (tycon_map, dcon_map, fvar_map) = imports_to_maps imports in
+  let imports = resolve_imports imports in
+  let (tycon_map, dcon_map, fvar_map) = imports_to_sigs mctx imports in
   let (_, (tycons', (vals' : R.decl list))) = 
     translate_decls Ctx.empty (tycon_map, dcon_map, fvar_map) decls in
   let m_sigmask = 
@@ -503,10 +511,18 @@ let resolve ~modpath ~export_dict (t : P.m) : R.m =
   (* Now we filter the organized tycons and values with the module export spec
    * to generate the list of exported identifiers. *)
   {
-    modid   = modpath;
+    modid   = Option.map modpath ~f:(fun m -> Node.node m None);
     exports = apply_sigmask m_sigmask (infersig_from_decls decls);
     imports = imports; 
     tycons  = tycons';
     vals    = vals';
   }
 
+let run mods = 
+  let mctx = Path.Map.of_alist_exn (ElmCore.SigResolved.sigs) in
+  List.folding_map mods ~init:mctx ~f:(
+    fun mctx (path, m) ->
+      let m' = resolve_mod ~modpath:(Some path) mctx m in
+      let mctx' = Map.add_exn mctx ~key:path ~data:m'.exports in
+      (mctx', m')
+  )
