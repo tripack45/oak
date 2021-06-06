@@ -39,10 +39,10 @@ struct
     | Fun of var'
     | Lam
 
-  (* Contex is a stack of a binder and the position of the enclosing construct *)
+  (* Context is a stack of a binder and the position of the enclosing construct *)
   type t = (binder * pos) list
-  (* Empty context *)
 
+  (* Empty context *)
   let empty : t = []
 
   let add ctx bp : t = (bp::ctx)
