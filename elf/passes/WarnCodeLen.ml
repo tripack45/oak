@@ -171,11 +171,7 @@ struct
 
   let op_size op = 
     match op with
-    | PLUS  | MINUS
-    | TIMES | DIV
-    | EQ
-    | GT    | GEQ
-    | LT    | LEQ -> trival
+    _ -> trival
 
   (* { x : limit * soft } 
    * limit is size's the lowest upper bound;

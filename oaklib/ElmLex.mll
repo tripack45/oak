@@ -34,6 +34,7 @@ rule initial =
   | '='         { T.EQ    }
   | "->"        { T.ARROW }
   | ','         { T.COMMA }
+  | '\\'        { T.LAMBDA }
   | '.'         { T.DOT }
   | '|'         { T.BAR   }
   | ":"         { T.OF_TYPE }
@@ -50,6 +51,11 @@ rule initial =
 
   | "++"        { T.CONCAT }
   | "::"        { T.PREPEND }
+
+  | "<|"        { T.LPIPE }
+  | "|>"        { T.RPIPE }
+  | "<<"        { T.LCOMBINATOR }
+  | ">>"        { T.RCOMBINATOR }
 
   | '+'         { T.PLUS  }
   | '-'         { T.MINUS }

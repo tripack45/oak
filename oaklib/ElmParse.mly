@@ -156,6 +156,8 @@ open Util
 %token RDELIM             (* }}  *)
 
 %token PREPEND
+%token LPIPE RPIPE
+%token LCOMBINATOR RCOMBINATOR
 %token GT LT GEQ LEQ
 %token PLUS MINUS
 %token TIMES DIV
@@ -326,6 +328,13 @@ aexp :
 | LT                                                                                { Expr.LT      }
 | LEQ                                                                               { Expr.LEQ     }
 //| PREPEND                                                                           { assert false }
+// Note: add new ones
+| PREPEND                                                                           { Expr.PREPEND     }
+| CONCAT                                                                            { Expr.CONCAT      }
+| LPIPE                                                                             { Expr.LPIPE       }
+| RPIPE                                                                             { Expr.RPIPE       }
+| LCOMBINATOR                                                                       { Expr.LCOMBINATOR }
+| RCOMBINATOR                                                                       { Expr.RCOMBINATOR }
 
 // Global constructors
 gcon:

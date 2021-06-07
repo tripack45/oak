@@ -22,8 +22,12 @@ type t =
     | LKET   | RKET    (* [] *)
     | LBRACE | RBRACE  (* {} *)
     | UNDERSCORE       (* _  *)
-    | CONCAT           (* ++ *)
     | PREPEND          (* :: *)
+    | CONCAT           (* ++ *)
+    | LPIPE            (* <| *)
+    | RPIPE            (* |> *)
+    | LCOMBINATOR      (* << *)
+    | RCOMBINATOR      (* >> *)
     (* Arithematics *)
     | PLUS  | MINUS
     | TIMES | DIV
@@ -77,9 +81,13 @@ let to_string tok=
 | LBRACE  -> "{"
 | RBRACE  -> "}"
 | LAMBDA  -> "\\"
-| UNDERSCORE -> "_"
-| PREPEND -> "::"
-| CONCAT  -> "++"
+| UNDERSCORE  -> "_"
+| PREPEND     -> "::"
+| CONCAT      -> "++"
+| LPIPE       -> "<|"
+| RPIPE       -> "|>"
+| LCOMBINATOR -> "<<"
+| RCOMBINATOR -> ">>"
 | PLUS    -> "+"
 | MINUS   -> "-"
 | TIMES   -> "*"
@@ -131,17 +139,21 @@ let to_parse_string tok =
 | LBRACE   -> "LBRACE"
 | RBRACE   -> "RBRACE"
 | LAMBDA   -> "LAMBDA"
-| UNDERSCORE -> "UNDERSCORE"
-| PREPEND    -> "PREPEND"
-| CONCAT     -> "CONCAT"
-| PLUS       -> "PLUS"
-| MINUS      -> "MINUS"
-| TIMES      -> "TIMES"
-| DIV        -> "DIV"
-| GT         -> "GT"
-| LT         -> "LT"
-| GEQ        -> "GEQ"
-| LEQ        -> "LEQ"
+| UNDERSCORE  -> "UNDERSCORE"
+| PREPEND     -> "PREPEND"
+| CONCAT      -> "CONCAT"
+| LPIPE       -> "LPIPE"
+| RPIPE       -> "RPIPE"
+| LCOMBINATOR -> "LCOMBINATOR"
+| RCOMBINATOR -> "RCOMBINATOR"
+| PLUS        -> "PLUS"
+| MINUS       -> "MINUS"
+| TIMES       -> "TIMES"
+| DIV         -> "DIV"
+| GT          -> "GT"
+| LT          -> "LT"
+| GEQ         -> "GEQ"
+| LEQ         -> "LEQ"
 | INTCONST   _ -> "INTCONST"
 | FLOATCONST _ -> "FLOATCONST"
 | STRCONST   _ -> "STRCONST"

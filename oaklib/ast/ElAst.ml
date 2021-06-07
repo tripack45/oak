@@ -193,6 +193,11 @@ struct
     | EQ
     | GT    | GEQ
     | LT    | LEQ
+    | PREPEND
+    | CONCAT
+    | LPIPE | RPIPE
+    | LCOMBINATOR
+    | RCOMBINATOR
 
   (* decl depends on the yet provided definition of type expr  *)
   (* We tvar' for both typ variables and row variables
@@ -300,6 +305,11 @@ struct
       | EQ
       | GT    | GEQ
       | LT    | LEQ
+      | PREPEND
+      | CONCAT
+      | LPIPE | RPIPE
+      | LCOMBINATOR
+      | RCOMBINATOR
 
     type expr = Syntax.expr =
       (* Control flow constructs *)
@@ -522,6 +532,12 @@ struct
     | GEQ   -> ">="
     | LT    -> "<"
     | LEQ   -> "<"
+    | PREPEND -> "::"
+    | CONCAT  -> "++"
+    | LPIPE   -> "<|"
+    | RPIPE   -> "|>"
+    | LCOMBINATOR -> "<<"
+    | RCOMBINATOR -> ">>"
 
   and expr_to_string e =
     let pp = expr_to_string in
