@@ -49,23 +49,30 @@ rule initial =
 
   | '_'         { T.UNDERSCORE }
 
-  | "++"        { T.CONCAT }
-  | "::"        { T.PREPEND }
+  | "<|"        { T.APL }
+  | "|>"        { T.APR }
 
-  | "<|"        { T.LPIPE }
-  | "|>"        { T.RPIPE }
-  | "<<"        { T.LCOMBINATOR }
-  | ">>"        { T.RCOMBINATOR }
-
-  | '+'         { T.PLUS  }
-  | '-'         { T.MINUS }
-  | '*'         { T.TIMES }
-  | '/'         { T.DIV   }
-
+  | "||"        { T.OR  }
+  | "&&"        { T.AND }
+  | "=="        { T.EQU }
+  | "/="        { T.NE  }
   | '>'         { T.GT  }
   | '<'         { T.LT  }
   | ">="        { T.GEQ }
   | "<="        { T.LEQ }
+
+  | "::"        { T.CONS }
+  | "++"        { T.APPEND }
+
+  | '+'         { T.PLUS  }
+  | '-'         { T.MINUS }
+  | '*'         { T.TIMES }
+  | '/'         { T.FDIV  }
+  | "//"        { T.IDIV  }
+  | '^'         { T.POW   }
+
+  | "<<"        { T.COMPOSEL }
+  | ">>"        { T.COMPOSER }
 
   | ';'         { T.SEMI      } 
   | "{%"        { T.LDELIM    } 

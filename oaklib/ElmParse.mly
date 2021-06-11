@@ -141,7 +141,6 @@ open Util
 %token LBRACE  RBRACE  
 (* Operators *)
 %token LKET    RKET  
-%token CONCAT 
      
 %token <string>INTCONST 
 %token <string>FLOATCONST
@@ -155,18 +154,22 @@ open Util
 %token LDELIM             (* {{  *)
 %token RDELIM             (* }}  *)
 
-%token PREPEND
-%token LPIPE RPIPE
-%token LCOMBINATOR RCOMBINATOR
-%token GT LT GEQ LEQ
-%token PLUS MINUS
-%token TIMES DIV
+(* Operators *)
+%token APL APR
+%token OR AND
+%token EQU NE GT LT GEQ LEQ
+%token CONS APPEND 
+%token PLUS MINUS TIMES FDIV IDIV POW
+%token COMPOSEL COMPOSER
 
-(* Arithematics *)
-%nonassoc GT LT GEQ LEQ EQ
-%right PREPEND
-%left PLUS MINUS
-%left TIMES DIV
+%left APL
+%right APR
+%left OR AND
+%nonassoc EQU NE GT LT GEQ LEQ
+%right CONS APPEND
+%left PLUS MINUS TIMES FDIV IDIV POW
+%left COMPOSEL
+%right COMPOSER
 
 (* Unused/intermedia tokens to supress compiler warnings *)
 %token EOF 
@@ -318,23 +321,26 @@ aexp :
 // | LPAREN qop_no_minus infixexp RPAREN                                               { 1 }
 
 %inline qop:
+| APL                                                                               { Expr.APL      }
+| APR                                                                               { Expr.APR      }
+| OR                                                                                { Expr.OR      }
+| AND                                                                               { Expr.AND     }
+| EQU                                                                               { Expr.EQU     }
+| NE                                                                                { Expr.NE      }
+| GT                                                                                { Expr.GT      }
+| LT                                                                                { Expr.LT      }
+| GEQ                                                                               { Expr.GEQ     }
+| LEQ                                                                               { Expr.LEQ     }
+| CONS                                                                              { Expr.CONS     }
+| APPEND                                                                            { Expr.APPEND   }
 | PLUS                                                                              { Expr.PLUS    }
 | MINUS                                                                             { Expr.MINUS   }
 | TIMES                                                                             { Expr.TIMES   }
-| DIV                                                                               { Expr.DIV     }
-| EQ                                                                                { Expr.EQ      }
-| GT                                                                                { Expr.GT      }
-| GEQ                                                                               { Expr.GEQ     }
-| LT                                                                                { Expr.LT      }
-| LEQ                                                                               { Expr.LEQ     }
-//| PREPEND                                                                           { assert false }
-// Note: add new ones
-| PREPEND                                                                           { Expr.PREPEND     }
-| CONCAT                                                                            { Expr.CONCAT      }
-| LPIPE                                                                             { Expr.LPIPE       }
-| RPIPE                                                                             { Expr.RPIPE       }
-| LCOMBINATOR                                                                       { Expr.LCOMBINATOR }
-| RCOMBINATOR                                                                       { Expr.RCOMBINATOR }
+| FDIV                                                                              { Expr.FDIV    }
+| IDIV                                                                              { Expr.IDIV    }
+| POW                                                                               { Expr.POW     }
+| COMPOSEL                                                                          { Expr.COMPOSEL }
+| COMPOSER                                                                          { Expr.COMPOSER }
 
 // Global constructors
 gcon:

@@ -1,4 +1,3 @@
-
 type t = 
     (* Keywords *)
     | MODULE | EXPOSING | IMPORT | AS
@@ -22,17 +21,47 @@ type t =
     | LKET   | RKET    (* [] *)
     | LBRACE | RBRACE  (* {} *)
     | UNDERSCORE       (* _  *)
-    | PREPEND          (* :: *)
-    | CONCAT           (* ++ *)
-    | LPIPE            (* <| *)
-    | RPIPE            (* |> *)
-    | LCOMBINATOR      (* << *)
-    | RCOMBINATOR      (* >> *)
+
+  (* infix right 0 (<|)   = apL
+   * infix left  0 (|>)   = apR
+   * infix right 2 (||)   = or
+   * infix right 3 (&&)   = and
+   * infix non   4 (==)   = eq
+   * infix non   4 (/=)   = neq
+   * infix non   4 (<)    = lt
+   * infix non   4 (>)    = gt
+   * infix non   4 (<=)   = le
+   * infix non   4 (>=)   = ge
+   * infix right 5 (::)   = cons
+   * infix right 5 (++)   = append
+   * infix left  6 (+)    = add
+   * infix left  6 (-)    = sub
+   * infix left  7 (\*\)  = mul
+   * infix left  7 (/)    = fdiv
+   * infix left  7 (//)   = idiv
+   * infix right 8 (^)    = pow
+   * infix left  9 (<<)   = composeL
+   * infix right 9 (>>)   = composeR
+   *)
+
+    | APL                 (* <| *)
+    | APR                 (* |> *)
+    | OR                  (* || *)
+    | AND                 (* && *)
+    | EQU                 (* == *)
+    | NE                  (* /= *)
+    | GT    | LT          (* >  *)
+    | GEQ   | LEQ         (* >= *)
+    | CONS                (* :: *)
+    | APPEND              (* ++ *)
     (* Arithematics *)
     | PLUS  | MINUS
-    | TIMES | DIV
-    | GT    | LT
-    | GEQ   | LEQ
+    | TIMES 
+    | FDIV                (* /  *)
+    | IDIV                (* // *)
+    | POW                 (* ^  *)
+    | COMPOSEL            (* << *)
+    | COMPOSER            (* >> *)
     (* Literals *)
     | INTCONST   of string
     | FLOATCONST of string
@@ -82,20 +111,27 @@ let to_string tok=
 | RBRACE  -> "}"
 | LAMBDA  -> "\\"
 | UNDERSCORE  -> "_"
-| PREPEND     -> "::"
-| CONCAT      -> "++"
-| LPIPE       -> "<|"
-| RPIPE       -> "|>"
-| LCOMBINATOR -> "<<"
-| RCOMBINATOR -> ">>"
-| PLUS    -> "+"
-| MINUS   -> "-"
-| TIMES   -> "*"
-| DIV     -> "/"
+| APL     -> "<|"
+| APR     -> "|>"
+| OR      -> "||"
+| AND     -> "&&"
+| EQU     -> "=="
+| NE      -> "/="
 | GT      -> ">"
 | LT      -> "<"
 | GEQ     -> ">="
 | LEQ     -> "<="
+| CONS    -> "::"
+| APPEND  -> "++"
+(* Arithematics *)
+| PLUS     -> "+"
+| MINUS    -> "-"
+| TIMES    -> "*"
+| FDIV     -> "/"
+| IDIV     -> "//"
+| POW      -> "^"
+| COMPOSEL -> "<<"
+| COMPOSER -> ">>"
 | INTCONST   s -> s ^ "_d"
 | FLOATCONST s -> s ^ "_f"
 | STRCONST   s -> "\"" ^ s  ^ "\""
@@ -140,20 +176,27 @@ let to_parse_string tok =
 | RBRACE   -> "RBRACE"
 | LAMBDA   -> "LAMBDA"
 | UNDERSCORE  -> "UNDERSCORE"
-| PREPEND     -> "PREPEND"
-| CONCAT      -> "CONCAT"
-| LPIPE       -> "LPIPE"
-| RPIPE       -> "RPIPE"
-| LCOMBINATOR -> "LCOMBINATOR"
-| RCOMBINATOR -> "RCOMBINATOR"
-| PLUS        -> "PLUS"
-| MINUS       -> "MINUS"
-| TIMES       -> "TIMES"
-| DIV         -> "DIV"
-| GT          -> "GT"
-| LT          -> "LT"
-| GEQ         -> "GEQ"
-| LEQ         -> "LEQ"
+| APL     -> "APL"
+| APR     -> "APR"
+| OR      -> "OR"
+| AND     -> "AND"
+| EQU     -> "EQU"
+| NE      -> "NE"
+| GT      -> "GT"
+| LT      -> "LT"
+| GEQ     -> "GEQ"
+| LEQ     -> "LEQ"
+| CONS    -> "CONS"
+| APPEND  -> "APPEND"
+(* Arithematics *)
+| PLUS     -> "PLUS"
+| MINUS    -> "MINUS"
+| TIMES    -> "TIMES"
+| FDIV     -> "FDIV"
+| IDIV     -> "IDIV"
+| POW      -> "POW"
+| COMPOSEL -> "COMPOSEL"
+| COMPOSER -> "COMPOSER"
 | INTCONST   _ -> "INTCONST"
 | FLOATCONST _ -> "FLOATCONST"
 | STRCONST   _ -> "STRCONST"

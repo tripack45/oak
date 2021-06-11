@@ -188,16 +188,18 @@ struct
   and typ' = typ node
 
   type op =
-    | PLUS  | MINUS
-    | TIMES | DIV
-    | EQ
-    | GT    | GEQ
-    | LT    | LEQ
-    | PREPEND
-    | CONCAT
-    | LPIPE | RPIPE
-    | LCOMBINATOR
-    | RCOMBINATOR
+    | APL  | APR
+    | OR   | AND
+    | EQU  | NE
+    | GT   | GEQ
+    | LT   | LEQ
+    | CONS | APPEND
+    | PLUS | MINUS
+    | TIMES
+    | FDIV | IDIV
+    | POW
+    | COMPOSEL
+    | COMPOSER
 
   (* decl depends on the yet provided definition of type expr  *)
   (* We tvar' for both typ variables and row variables
@@ -300,16 +302,18 @@ struct
   module Expr =
   struct 
     type op = Syntax.op =
-      | PLUS  | MINUS
-      | TIMES | DIV
-      | EQ
-      | GT    | GEQ
-      | LT    | LEQ
-      | PREPEND
-      | CONCAT
-      | LPIPE | RPIPE
-      | LCOMBINATOR
-      | RCOMBINATOR
+      | APL  | APR
+      | OR   | AND
+      | EQU  | NE
+      | GT   | GEQ
+      | LT   | LEQ
+      | CONS | APPEND
+      | PLUS | MINUS
+      | TIMES
+      | FDIV | IDIV
+      | POW
+      | COMPOSEL
+      | COMPOSER
 
     type expr = Syntax.expr =
       (* Control flow constructs *)
@@ -523,21 +527,27 @@ struct
       | _ -> sprintf "%s of %s" (qdcon_to_string qdcon)  (concat_map " " pat_to_string pats)
 
   and op_to_string = function 
-    | PLUS  -> "+"
-    | MINUS -> "-"
-    | TIMES -> "*"
-    | DIV   -> "/"
-    | EQ    -> "="
-    | GT    -> ">"
-    | GEQ   -> ">="
-    | LT    -> "<"
-    | LEQ   -> "<"
-    | PREPEND -> "::"
-    | CONCAT  -> "++"
-    | LPIPE   -> "<|"
-    | RPIPE   -> "|>"
-    | LCOMBINATOR -> "<<"
-    | RCOMBINATOR -> ">>"
+    | APL     -> "<|"
+    | APR     -> "|>"
+    | OR      -> "||"
+    | AND     -> "&&"
+    | EQU     -> "=="
+    | NE      -> "/="
+    | GT      -> ">"
+    | LT      -> "<"
+    | GEQ     -> ">="
+    | LEQ     -> "<="
+    | CONS    -> "::"
+    | APPEND  -> "++"
+    (* Arithematics *)
+    | PLUS     -> "+"
+    | MINUS    -> "-"
+    | TIMES    -> "*"
+    | FDIV     -> "/"
+    | IDIV     -> "//"
+    | POW      -> "^"
+    | COMPOSEL -> "<<"
+    | COMPOSER -> ">>"
 
   and expr_to_string e =
     let pp = expr_to_string in
