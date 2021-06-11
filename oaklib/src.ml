@@ -32,22 +32,29 @@ struct
     raw   : string;
   }
 
-  let of_stdin () = 
-    let strings = Core.In_channel.input_lines stdin in
+  let _of_chn src_name chn =
+    let strings = Core.In_channel.input_lines chn in
     let raw = Core.String.concat ~sep:"\n" strings in
     let lines = Core.Array.of_list strings in
     (* Break the raw string by resending them into a channel *)
-    { name = Stdin; raw; lines }
+    { name = src_name ; raw; lines }
+
+  let of_stdin () = 
+    _of_chn Stdin stdin
 
   let of_in_channel name chn = 
+    _of_chn (File name) chn
+
+
+  let of_in_channel _name _chn = 
     assert false
 
-  let to_stream { raw } = 
+  let to_stream { raw; _ } = 
     Stream.of_string raw
 
-  let raw { raw } = raw
+  let raw { raw; _ } = raw
 
-  let to_in_channel { raw } = 
+  let to_in_channel { raw; _ } = 
     Core.In_channel.create raw
 
   let name {name; _} = 
@@ -59,6 +66,6 @@ struct
     (* Line number counts from 1*)
     let (l, l') = (s.pos_lnum - 1, e.pos_lnum) in
     Core.Array.slice lines l l'
-    |> Core.Array.mapi ~f:(fun i str -> Printf.sprintf "%3d| %s\n" (i + l + 1) str)
+    |> Core.Array.mapi ~f:(fun i str -> Printf.sprintf "%3d| %s" (i + l + 1) str)
     |> Core.String.concat_array ~sep:"\n"
 end
