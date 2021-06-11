@@ -527,10 +527,10 @@ struct
       | _ -> sprintf "%s of %s" (qdcon_to_string qdcon)  (concat_map " " pat_to_string pats)
 
   and op_to_string = function 
-    | APL     -> "<|"
-    | APR     -> "|>"
-    | OR      -> "||"
-    | AND     -> "&&"
+    | APL     -> "<@"
+    | APR     -> "@>"
+    | OR      -> "or"
+    | AND     -> "and"
     | EQU     -> "=="
     | NE      -> "/="
     | GT      -> ">"
