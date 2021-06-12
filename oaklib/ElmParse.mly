@@ -146,6 +146,10 @@ open Util
 %token <string>FLOATCONST
 %token <string>STRCONST
 
+(* Comments *)
+// %token <string>LINE_COMMENT
+// %token <string>BLOCK_COMMENT
+
 %token <string>VARID
 %token <string>CONID
 %token <string>QVARID

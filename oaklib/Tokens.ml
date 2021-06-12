@@ -66,6 +66,9 @@ type t =
     | INTCONST   of string
     | FLOATCONST of string
     | STRCONST   of string
+    (* Comments *)
+    (* | LINE_COMMENT  of string
+    | BLOCK_COMMENT of string *)
     (* Identifiers *)
     | VARID     of string
     | CONID     of string
@@ -111,7 +114,7 @@ let to_string tok=
 | LBRACE  -> "{"
 | RBRACE  -> "}"
 | LAMBDA  -> "\\"
-| UNDERSCORE  -> "_"
+| UNDERSCORE -> "_"
 | APL     -> "<|"
 | APR     -> "|>"
 | OR      -> "||"
@@ -136,6 +139,8 @@ let to_string tok=
 | INTCONST   s -> s ^ "_d"
 | FLOATCONST s -> s ^ "_f"
 | STRCONST   s -> "\"" ^ s  ^ "\""
+(* | LINE_COMMENT  s -> "--" ^ s
+| BLOCK_COMMENT s -> "{-" ^ s ^ "-}" *)
 | VARID      s -> "Var:" ^ s 
 | CONID      s -> "Con:" ^ s
 | QVARID     s -> "QVar:" ^ s 
@@ -177,7 +182,7 @@ let to_parse_string tok =
 | LBRACE   -> "LBRACE"
 | RBRACE   -> "RBRACE"
 | LAMBDA   -> "LAMBDA"
-| UNDERSCORE  -> "UNDERSCORE"
+| UNDERSCORE -> "UNDERSCORE"
 | APL     -> "APL"
 | APR     -> "APR"
 | OR      -> "OR"
