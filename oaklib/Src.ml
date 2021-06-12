@@ -45,10 +45,6 @@ struct
   let of_in_channel name chn = 
     _of_chn (File name) chn
 
-
-  let of_in_channel _name _chn = 
-    assert false
-
   let to_stream { raw; _ } = 
     Stream.of_string raw
 

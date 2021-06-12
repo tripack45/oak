@@ -179,5 +179,24 @@ struct
 
 end
 
+(* layout_insensitive *)
 
-
+module L = LayoutSensitiveLexer
+module T = L.T
+let layout_insensitive_src src=
+  let lexbuf = Lexing.from_string ~with_positions:true (Src.Source.raw src) in
+  let t = L.from_lexbuf lexbuf in
+    let rec looper () = 
+      let (tok, _pos) = L.take_expanded t in (
+        match tok with 
+        | T.EOF -> raise T.Eof
+        | _ ->
+          print_string @@ T.to_string tok ^ " ";
+          looper()
+      )
+    in 
+    try
+         looper ()
+    with 
+    T.Eof -> ();
+    print_endline ""
