@@ -9,8 +9,8 @@ struct
   let naked n pos = node n (pos, Naked)
   let wrapped par_node pos' : 't par_node = 
     let f = function
-            | (pos, Naked)     -> (pos', Wrapped 1)
-            | (pos, Wrapped i) -> (pos', Wrapped (i + 1))
+            | (_pos, Naked)     -> (pos', Wrapped 1)
+            | (_pos, Wrapped i) -> (pos', Wrapped (i + 1))
     in map_attr f par_node
 
   let expr n pos : expr' = naked n pos
@@ -185,8 +185,7 @@ main:
 | LDELIM body RDELIM                                                                { Module.Mod (None, fst $2, snd $2) }
 
 module_decl :
-| MODULE c=CONID                                                                    { mod_decl (mcon c $loc(c), None)    $loc }
-| MODULE c=CONID exposing                                                           { mod_decl (mcon c $loc(c), Some $3) $loc }
+| MODULE c=CONID ex=option(exposing)                                                { mod_decl (mcon c $loc(c), ex) $loc }
 
 body:
 | impdecl SEMI body                                                                 { add_import $3 $1 }
@@ -266,7 +265,7 @@ row :
 | fields                                                                            { Typ.Fields $1                  }
 
 fields:
-| separated_nonempty_list(COMMA, field)                                             { $1                             } 
+| separated_list(COMMA, field)                                                      { $1                             } 
 
 field :
 | fieldid OF_TYPE type_                                                             { ($1, $3)                       }
