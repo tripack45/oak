@@ -17,7 +17,13 @@
  *   preform neccssary transformations.
  *)
 
+open Core
+
 open Oaklib
+
+module R = Util.PassResult.WarnList
+
+open R.Pervasive
 
 open ElAst.Syntax
 open ElAst.Node
@@ -59,9 +65,7 @@ type violation = (binder * pos) list * expr' * int
  * - No violations has been found, in which case we note the current parentheses
  *   depths of the expression.
  *)
-type result = 
-   | Depths     of int
-   | Violations of violation list
+type result = (int, violation) R.t
 
 (* An expression can have multiple sub-expressions, for example a case-expression 
  * can have any number of branches each with a different parentheses depth. 
@@ -71,25 +75,21 @@ type result =
  * - None of the sub-expressions constitutes a violation, then we use the maximum
  *   parentheses depths of all sub-expressions as its depths.
  *)
-let merge_result rx ry : result = 
-   match (rx, ry) with
-   | (Violations rx, Violations ry) -> Violations (rx @ ry)
-   | (Violations _, _) -> rx
-   | (_, Violations _) -> ry
-   | (Depths dx, Depths dy) -> Depths (max dx dy)
+let maxd rx ry = (rx ** ry) >>| Tuple2.uncurry max
 
-(* The "nullary" result, A.K.A. the "bottom" result *)
-let bot = Depths 0
+let maxints ints = 
+  List.max_elt ints ~compare:Int.compare |> Option.value ~default: 0
 
-let merge_results = Core.List.fold ~init:bot ~f:merge_result
+let ( <*> ) = maxd
 
-let run ?(max_depth=5) (Mod (_mdecl, _imports, decls)) : result = 
+let run ?(max_depth=5) ?soft (Mod (_mdecl, _imports, decls)) : result = 
+  let soft = max 0 (Option.value soft ~default:(max_depth - 2)) in
   let rec decl_par_depths ctx decl : result =
     let (decl, pos) = both decl in
     match decl with 
     | Annot _  
     | TyCon _ 
-    | Alias _ -> bot
+    | Alias _ -> ok 0
     | Pat (pat, e) -> 
       let ctx' = BindingContext.add ctx (Val pat, pos) in
       expr_par_depths ctx' e
@@ -102,41 +102,44 @@ let run ?(max_depth=5) (Mod (_mdecl, _imports, decls)) : result =
     let (expr', (pos, par)) = both expr in
     (* Stacks the parenthese depths of current expr node *)
     let stack_par result : result = 
-      match (result, par) with
-      | (Violations _, _) -> result
-      | (Depths _, Naked) -> result
-      | (Depths x, Wrapped y) -> 
+      let* x = result in
+      match par with
+      | Naked -> ok x
+      | Wrapped y -> 
         if x + y < max_depth then 
-          Depths (x + y)
+          ok (x + y)
         else
-          Violations [(BindingContext.dump ctx, expr, x + y)]
+          warn soft (BindingContext.dump ctx, expr, x + y)
     in
     let sub_result = 
       match expr' with 
       (* Context altering cases *)
       | Case (e, branches) -> 
-        let branch_depth (pat, expr') = 
+        let branch_depth (pat, expr') : result = 
           let ctx' = BindingContext.add ctx (Val pat, pos) in
           expr_par_depths ctx' expr'
-        in merge_results @@ dep e :: List.map branch_depth branches 
+        in dep e <*> R.Par.map_then branches ~fmap:branch_depth ~fthen:maxints
       | Lambda (_, e)      ->
         let ctx' = BindingContext.add ctx (Lam, pos) in
         expr_par_depths ctx' e
       | Let (decls, e)     -> 
         (* Context updates were folded inside decl_par_depths *)
-        merge_results @@ dep e :: List.map (decl_par_depths ctx) decls
+        dep e <*> R.Par.map_then decls ~fmap:(decl_par_depths ctx) ~fthen:maxints
       (* Context preserving cases *)
-      | If (e0, (e1, e2))  -> merge_results [dep e0; dep e1; dep e2]
-      | App (e, es)        -> merge_results (dep e :: List.map dep es)
-      | Infix (_, e0, e1)  -> merge_result (dep e0) (dep e1)
-      | Tuple es           -> merge_results (List.map dep es)
-      | List es            -> merge_results (List.map dep es)
-      | Record field_exprs -> merge_results (List.map (fun fe -> dep @@ snd fe) field_exprs)
-      | Con (_, es)        -> merge_results (List.map dep es)
-      | Var _ | Literal  _ | Unit  | OpFunc _ -> stack_par bot
+      | If (e0, (e1, e2))  -> dep e0 <*> dep e1 <*> dep e2
+      | App (e, es)        -> dep e  <*> R.Par.map_then es ~fmap:dep ~fthen:maxints
+      | Infix (_, e0, e1)  -> (dep e0) <*> (dep e1)
+      | Tuple es           -> R.Par.map_then es ~fmap:dep ~fthen:maxints
+      | List es            -> R.Par.map_then es ~fmap:dep ~fthen:maxints
+      | Record field_exprs -> R.Par.map_then field_exprs ~fmap:(fun fe -> dep @@ snd fe) ~fthen:maxints
+      | Con (_, es)        -> R.Par.map_then es ~fmap:dep ~fthen:maxints
+      | Var _ 
+      | Literal  _ 
+      | Unit  
+      | OpFunc _ -> ok 0
     in stack_par sub_result
-
-  in merge_results @@ List.map (decl_par_depths BindingContext.empty) decls 
+  in 
+  R.Par.map_then decls ~fmap:(decl_par_depths BindingContext.empty) ~fthen:maxints
 
 
 let dump_result src r = 
@@ -152,18 +155,13 @@ let dump_result src r =
                     binder_str (ElAst.ToString.pos_to_string pos)
     in 
     let (pos, _) = attr expr in
-    List.iter dump_binding ctx;
-    Printf.printf "Expression (at %s) below reaches a parentheses depths of %d:\n%s"
+    List.iter ~f:dump_binding ctx;
+    Printf.printf "Expression (at %s) below reaches a parentheses depths of %d:\n%s\n\n"
                   (ElAst.ToString.pos_to_string pos)
                   depths 
                   (Src.Source.lines src pos)
   in
-  match r with 
-  | Depths d -> 
-    Printf.printf "The maximum parentheses depths is %d.\n" d
-  | Violations entries ->
+  let (_, entries) = R.run r in
     Core.List.iteri entries ~f:(
-      fun idx entry ->
-        if idx != 0 then print_endline "" else ();
-        dump_entry entry
+      fun _idx entry -> dump_entry entry
     )
