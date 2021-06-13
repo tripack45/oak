@@ -27,3 +27,17 @@ setup.log
 
 # Local OPAM switch
 _opam/
+
+# dirty
+/dirty/
+elm-stuff/
+/dirty/**/doc/
+/dirty/**/booklet/
+/dirty/**/public/
+/dirty/**/assets/
+/dirty/**/Makefile
+/dirty/**/*.html
+/dirty/**/*.js
+/dirty/**/*.css
+/dirty/**/*.md
+/dirty/**/*.txt
