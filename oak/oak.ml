@@ -42,9 +42,13 @@ let () =
     ~f:(fun (_, m) -> Parse.dump_with_layout @@ ElAst.ToString.m_to_string m) 
 
 let () = print_endline "----- [Phase] ResolveModuleDependency -----"
-let mods = Pass.PhaseResolveModuleDependency.run mods 
-        |> Core.Result.ok_exn
-        |> Core.List.map ~f:(fun (path, (_, m)) -> (path, m))
+let mods = 
+  let open Pass.PhaseResolveModuleDependency in
+  match run mods with
+  | R.Ok v -> v |> Core.List.map ~f:(fun (path, (_, m)) -> (path, m))
+  | R.Error errors -> 
+    dump_errors src errors; assert false
+
 let () = 
   Core.List.iter mods 
     ~f:(fun (_, m) -> Parse.dump_with_layout @@ ElAst.ToString.m_to_string m)
