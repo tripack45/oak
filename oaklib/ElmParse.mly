@@ -289,22 +289,46 @@ rhs:
 // | gdrhs 
 
 // Expression sub language
-
+// 
+// The Haskell expression language (by extenstin Elm) allows control flow expressions to be under infix operators,
+// this naturally causes tons of room for ambiguities, to which the Haskell syntax guide says (quote):
+//
+//    In both the lexical and the context-free syntax, there are some ambiguities that are to be resolved by making 
+//    grammatical phrases as long as possible, proceeding from left to right (in shift-reduce parsing, resolving 
+//    shift/reduce conflicts by shifting). In the lexical syntax, this is the “maximal munch” rule. In the context-free 
+//    syntax, this means that conditionals, let-expressions, and lambda abstractions extend to the right as far as possible.
+//
+// Examples of expressions allowed include:
+//   1 + if True then 1 else 2 + 3     parses as       1 + (if True then 1 else (2 + 3))
+//   2 + 3 * let x = 1 in x * 3 + 2    parses as       2 + 3 * (let x = 1 in ((x * 3) + 2))
+//
+// "Extend to the right as far as possible" is not very precise in terms of CFG rules. 
+//
+// This parser interpretes the rule as following: Expressions must either not contain control flow operators entirely, or
+// the control flow expression must appear at the right most leaf of the expression parse tree. 
+//
 exp:
+| infixexp_exp                                                                      { $1 }
+| infixexp                                                                          { $1 } 
+
+cexp:
 | LAMBDA nonempty_list(apat) ARROW exp                                              { expr (Expr.Lambda ($2, $4))   $loc }
 | LET decls=decls IN e=exp                                                          { expr (Expr.Let (decls, e))    $loc }
 | IF e1=exp THEN e2=exp ELSE e3=exp                                                 { expr (Expr.If (e1, (e2, e3))) $loc }
 | CASE e=exp OF LDELIM alts=separated_list(SEMI, alt) RDELIM                        { expr (Expr.Case (e, alts))    $loc }
-| infixexp                                                                          { $1 }
 
-fexp:
-| aexp nonempty_list(aexp)                                                          { expr (Expr.App ($1, $2)) $loc  }
+infixexp_exp:
+| infixexp qop infixexp_exp                                                         { expr (op2expr $2 $1 $3) $loc }
+| cexp                                                                              { $1 }
 
 infixexp:
 | infixexp qop infixexp                                                             { expr (op2expr $2 $1 $3) $loc   }
 | MINUS aexp                                                                        { assert false }
 | fexp                                                                              { $1 }
 | aexp                                                                              { $1 }
+
+fexp:
+| aexp nonempty_list(aexp)                                                          { expr (Expr.App ($1, $2)) $loc  }
 
 aexp :
 | qvar                                                                              { expr (Expr.Var $1)        $loc }
