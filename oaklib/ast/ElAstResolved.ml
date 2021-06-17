@@ -108,8 +108,8 @@ struct
   type ('binder, 'id) ident_ref' = ('binder, 'id) ident_ref node
 
   type varid  = VarId.t
-  type dconid = TyConId.t
-  type tyconid = DConId.t
+  type dconid = DConId.t
+  type tyconid = TyConId.t
 
   type varid'  = varid node
   type dconid' = dconid node
@@ -240,6 +240,66 @@ struct
     tycons  : typdecl list;
     vals    : decl list;
   }
+end
+
+module Alias = 
+struct
+  open Syntax
+
+  module Pat =
+  struct
+    type pat = Syntax.pat =
+      | Var        of var'
+      | Any
+      | Unit 
+      | EmptyList
+      | Literal    of lit'
+      | List       of pat node list
+      | Tuple      of pat node list
+      | Con        of dconref' * (pat node list)
+  end
+
+  module Expr = 
+  struct
+    type expr = Syntax.expr =
+      (* Control flow constructs *)
+      | Let        of (typdecl list * decl list) * expr'
+      | Case       of expr' * ((pat' * expr') list)
+      | If         of expr' * (expr' * expr')
+      | Lambda     of pat' list * expr'
+      | App        of expr' * (expr' list)
+      (* Operators *)
+      | Infix      of op * expr' * expr'
+      | OpFunc     of op
+      (* Builtin Types *)
+      | Unit
+      | Tuple      of expr' list  (* >= 2 elements *)
+      | List       of expr' list  (* >= 0 elements *)
+      | Record     of (field' * expr') list
+      (* Data construction *)
+      | Con        of dconref' * (expr' list)
+      (* Identifier refernce *)
+      | Var        of varref'
+      (* Literals *)
+      | Literal    of lit'
+  end
+
+  module Typ =
+  struct
+    type typ = Syntax.typ =
+      | TVar   of tvar'
+      | Unit
+      | TyCon  of tyconref'
+      | Arrow  of typ' * typ'
+      | TApp   of typ' * typ'
+      | Record of row
+      | Tuple  of typ' list
+
+    type row = Syntax.row =
+      | RVar      of rvar'
+      | Extension of row * (field' * typ') list
+      | Fields    of (field' * typ') list
+  end
 end
 
 module ToString = 

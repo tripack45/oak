@@ -54,7 +54,12 @@ let () =
     ~f:(fun (_, m) -> Parse.dump_with_layout @@ ElAst.ToString.m_to_string m)
 
 let () = print_endline "----- [Phase] ResolveSymbols -----" 
-let mods = Pass.PhaseResolveSymbols.run mods
+let mods = 
+  let open Pass.PhaseResolveSymbols in
+  match run mods with
+  | Rst.Ok (v, _w) -> v
+  | Rst.Error (_e, _ws) -> assert false
+
 let () = 
   Core.List.iter mods 
     ~f:(fun m -> Parse.dump_with_layout @@ ElAstResolved.ToString.m_to_string m)
