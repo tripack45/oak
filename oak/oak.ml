@@ -33,7 +33,7 @@ let to_path str = ElAst.Path.Just (ElAst.MConId.of_string str)
 
 let mods = 
   [
-    (to_path "Stdin", Parse.parse_src src);
+    (to_path "Stdin", Parse.parse_src' src);
   ]
 
 let () = print_endline "----- [Info] EL AST -----"

@@ -15,3 +15,9 @@ view model =
     , div [] [ text (String.fromInt model) ]
     , button [ onClick Increment ] [ text "+" ]
     ]
+
+p = let x = 1 in x
+
+q = let x = 1 in let y = x in let z = y in z
+
+r = let x = let y = let z = 1 in z in y in x
