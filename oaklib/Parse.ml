@@ -7,11 +7,11 @@ exception ParseFailure
 
 let parse_chn chn =
   let lexbuf = Lexing.from_channel ~with_positions:true chn in
-  let t = Lex.LayoutSensitiveLexer.from_lexbuf lexbuf in
+  let t = Lex.LayoutSensitiveLexer.Legacy.from_lexbuf lexbuf in
   let init = ElmParse.Incremental.main lexbuf.lex_curr_p in
   (* Loop functions *)
   let supplier () = 
-    let (tok, (pos_s, pos_e)) = Lex.LayoutSensitiveLexer.take_expanded t in
+    let (tok, (pos_s, pos_e)) = Lex.LayoutSensitiveLexer.Legacy.take_expanded t in
     (tok, pos_s, pos_e)
   in
   let succeed v = v in
@@ -21,11 +21,11 @@ let parse_chn chn =
 let parse_src src =
   let lexbuf = Lexing.from_string ~with_positions:true (Src.Source.raw src) in
   let _ = Lexing.set_filename lexbuf (Src.Source.name src) in
-  let t = Lex.LayoutSensitiveLexer.from_lexbuf lexbuf in
+  let t = Lex.LayoutSensitiveLexer.Legacy.from_lexbuf lexbuf in
   let init = ElmParse.Incremental.main lexbuf.lex_curr_p in
   (* Loop functions *)
   let supplier () = 
-    let (tok, (pos_s, pos_e)) = Lex.LayoutSensitiveLexer.take_expanded t in
+    let (tok, (pos_s, pos_e)) = Lex.LayoutSensitiveLexer.Legacy.take_expanded t in
     (tok, pos_s, pos_e)
   in
   let succeed v = v in
