@@ -190,6 +190,7 @@ module_decl :
 body:
 | impdecl SEMI body                                                                 { add_import $3 $1 }
 | separated_list(SEMI, topdecl)                                                     { mod_decls $1     }
+| impdecl                                                                           { add_import ([], []) $1 }
 
 impdecl:
 | IMPORT qc=modid as_con=option(as_con) ex=option(exposing)                         { mod_import (qc, as_con, ex) $loc} 
