@@ -88,9 +88,19 @@ struct
   type dctx = R.path DConId.Map.t
   type vctx = R.path VarId.Map.t
 
-  type t = tctx * dctx * vctx
+  type t = 
+  {
+    tctx : tctx;
+    dctx : dctx;
+    vctx : vctx;
+  }
 
-  let empty = (TyConId.Map.empty, DConId.Map.empty, VarId.Map.empty)
+  let empty : t = 
+  {
+    tctx  = TyConId.Map.empty;
+    dctx  = DConId.Map.empty;
+    vctx  = VarId.Map.empty;
+  }
 end
 
 (* tctx : Type Constructor Context
@@ -111,12 +121,24 @@ struct
   type dctx = DCon.t  DConId.Map.t
   type vctx = Var.t   VarId.Map.t
 
-  type t = tctx * dctx * vctx
+  type t = 
+  {
+    tctx : tctx;
+    dctx : dctx;
+    vctx : vctx;
+  }
 
   let empty_tctx = TyConId.Map.empty
   let empty_dctx = DConId.Map.empty
   let empty_vctx = VarId.Map.empty
-  let empty : t = (empty_tctx, empty_dctx, empty_vctx)
+
+  let empty : t = 
+  {
+    tctx  = TyConId.Map.empty;
+    dctx  = DConId.Map.empty;
+    vctx  = VarId.Map.empty;
+  }
+
 end
 
 type amap = (R.varid' * P.typ') VarId.Map.t
@@ -150,15 +172,15 @@ let resolve_ident ~unpack ~fwarn map ctx qid =
         warn (Node.node (R.Unresolved id) pos) (fwarn id)
              
 
-let resolve_var ((_,  _, fvar_map): CtxOpen.t) vctx (qvar : P.qvar') =
+let resolve_var fvar_map vctx (qvar : P.qvar') =
   resolve_ident fvar_map vctx qvar ~unpack:(fun (P.QVar (p, v)) -> (p, v)) 
                                    ~fwarn:(fun varid' -> UnresolvedVarId varid')
 
-let resolve_dcon ((_,  dcon_map, _): CtxOpen.t) dctx (qcon : P.qdcon') =
+let resolve_dcon dcon_map dctx (qcon : P.qdcon') =
   resolve_ident dcon_map dctx qcon ~unpack:(fun (P.QDCon (p, c)) -> (p, c)) 
                                    ~fwarn:(fun dconid' -> UnresolvedDConId dconid')
 
-let resolve_tycon ((tycon_map,  _, _): CtxOpen.t) tctx (qtycon : P.qtycon') =
+let resolve_tycon tycon_map tctx (qtycon : P.qtycon') =
   resolve_ident tycon_map tctx qtycon ~unpack:(fun (P.QTyCon (p, c)) -> (p, c)) 
                                       ~fwarn:(fun tyconid' -> UnresolvedTyConId tyconid')
 
@@ -271,7 +293,7 @@ let resolve_imports (imports : P.import list) : (R.path' * R.sigmask) list =
 (* TODO:
  * This function assumes a valid signature. Signatures derived from modules are guaranteed to be valid, 
  * while signatures extracted from sigmasks does not guaranteed to be valid. *)
-let sigt_to_dicst (tycon_map, dcon_map, fvar_map) (path, sigt)  =
+let sigt_to_dicst ({tctx=tycon_map; dctx=dcon_map; vctx=fvar_map} : CtxOpen.t) (path, sigt)  =
   let (R.Sig.Sig (tycons, vals)) = sigt in
   let set_find map ~key ~data =
     let prev = Map.find map key in
@@ -307,7 +329,11 @@ let sigt_to_dicst (tycon_map, dcon_map, fvar_map) (path, sigt)  =
         | `Duplicate (m', dup) -> warn m' (ImportShadowingVar ((var, Node.elem path), dup))
     )
   in
-  ok (tycon_map', dcon_map', fvar_map')
+  ok {
+    CtxOpen.tctx = tycon_map'; 
+    CtxOpen.dctx = dcon_map'; 
+    CtxOpen.vctx = fvar_map';
+  }
 
 let imports_to_sigs mctx (imports : (R.path' * R.sigmask) list) =
   Rst.Seq.fold imports ~init:(ok CtxOpen.empty) ~f:(
@@ -367,7 +393,7 @@ let bind_pats ?prefix vctx pats =
     ) 
   in ok @@ (ctx', varids')
 
-let rec translate_pat (amap : amap) ((_tctx, dctx, vctx) as ctx) dicts (pat : P.pat') =
+let rec translate_pat (amap : amap) (ctx : Ctx.t) dicts (pat : P.pat') =
   let (elem, pos) = Node.both pat in
   let ok' pat = ok @@ Node.node pat pos in
   let tr  = translate_pat amap ctx dicts in
@@ -380,29 +406,29 @@ let rec translate_pat (amap : amap) ((_tctx, dctx, vctx) as ctx) dicts (pat : P.
   | P.List pats   -> let* pats' = trs pats in ok' @@ A.Pat.List pats' 
   | P.Tuple pats  -> let* pats' = trs pats in ok' @@ A.Pat.Tuple pats'
   | P.Var v       -> 
-    let* twin = lookup_binder vctx v in (
+    let* twin = lookup_binder ctx.vctx v in (
       match Map.find amap (Node.elem v) with
       | None -> ok' @@ A.Pat.Var (twin, None)
       | Some (var, typ) -> 
         (* This should always succeed since we have checked all annotations are placed on
          * valid binders of this scope *)
-        let* twin'  = lookup_binder vctx var
-        and* typ'  = translate_typ ctx dicts typ in
+        let* twin'  = lookup_binder ctx.vctx var
+        and* typ'  = translate_typ ctx.tctx dicts typ in
         ok' @@ A.Pat.Var (twin, Some (twin', typ'))
     )
   | P.Con (qcon, pats) -> 
-    let* con'  = resolve_dcon dicts dctx qcon
+    let* con'  = resolve_dcon dicts.CtxOpen.dctx ctx.dctx qcon
     and* pats' = Rst.Par.map pats ~f:tr in
     ok' @@ A.Pat.Con (con', pats')
 
-and translate_typ ((tctx, _, _) as ctx) dicts (typ : P.typ') =
+and translate_typ tctx dicts (typ : P.typ') =
   let (elem, pos) = Node.both typ in
   let ok' typ' = ok @@ Node.node typ' pos in
-  let tr = translate_typ ctx dicts in
+  let tr = translate_typ tctx dicts in
   match elem with 
   | P.TVar v         -> ok' @@ R.TVar v
   | P.Unit           -> ok' A.Typ.Unit
-  | P.TyCon qcon     -> let* qcon' = resolve_tycon dicts tctx qcon in ok' (A.Typ.TyCon qcon')
+  | P.TyCon qcon     -> let* qcon' = resolve_tycon dicts.tctx tctx qcon in ok' (A.Typ.TyCon qcon')
   | P.Arrow (t1, t2) -> let* t1' = tr t1 and* t2' = tr t2 in ok' @@ R.Arrow (t1', t2')
   | P.TApp  (t1, t2) -> let* t1' = tr t1 and* t2' = tr t2 in ok' @@ R.Arrow (t1', t2')
   | P.Tuple ts       -> let* ts' = Rst.Par.map ts ~f:tr   in ok' @@ A.Typ.Tuple ts'
@@ -424,7 +450,7 @@ and translate_typ ((tctx, _, _) as ctx) dicts (typ : P.typ') =
     let* row' = translate_row row in 
     ok' @@ A.Typ.Record row'
 
-let rec translate_expr (((tctx, dctx, vctx) as ctx) : Ctx.t) dicts (expr : P.expr') : R.expr' rslt = 
+let rec translate_expr (ctx : Ctx.t) dicts (expr : P.expr') : R.expr' rslt = 
   let tr e = translate_expr ctx dicts e in
   let (expr, (pos, _)) = Node.both expr in
   let ok' e = ok @@ Node.node e pos in
@@ -437,18 +463,18 @@ let rec translate_expr (((tctx, dctx, vctx) as ctx) : Ctx.t) dicts (expr : P.exp
     let* e' = tr e in
     let* branches' = Rst.Par.map branches ~f:(
       fun (pat, expr) -> 
-        let* (vctx', _) = bind_pats vctx [pat] in
+        let* (vctx', _) = bind_pats ctx.vctx [pat] in
         (* There is no syntax for Elm to annotate types for binders in cases *)
-        let* pat'  = translate_pat  VarId.Map.empty (tctx, dctx, vctx') dicts pat 
-        and* expr' = translate_expr (tctx, dctx, vctx') dicts expr in
+        let* pat'  = translate_pat  VarId.Map.empty {ctx with vctx=vctx'} dicts pat 
+        and* expr' = translate_expr {ctx with vctx=vctx'} dicts expr in
         ok (pat', expr')
     ) in 
     ok' @@ R.Case (e', branches')
   | P.Lambda (pats, e) -> 
-    let* (vctx', _) = bind_pats vctx pats in
+    let* (vctx', _) = bind_pats ctx.vctx pats in
     (* Elm does not have syntax to annotate type for lambda arguments *)
-    let* pats' = Rst.Par.map pats ~f:(translate_pat VarId.Map.empty (tctx, dctx, vctx') dicts)
-    and* e' = translate_expr (tctx, dctx, vctx') dicts e in
+    let* pats' = Rst.Par.map pats ~f:(translate_pat VarId.Map.empty {ctx with vctx=vctx'} dicts)
+    and* e' = translate_expr {ctx with vctx=vctx'} dicts e in
     ok' @@ R.Lambda (pats', e')
   | P.If (e0, (e1, e2)) ->
     let* e0' = tr e0 
@@ -473,9 +499,9 @@ let rec translate_expr (((tctx, dctx, vctx) as ctx) : Ctx.t) dicts (expr : P.exp
       fun (field, e) -> let+ e' = tr e in (field, e')
     ) in
     ok' @@ R.Record fields'
-  | P.Var v                -> let* v' = resolve_var dicts vctx v in ok' @@ R.Var v'
+  | P.Var v                -> let* v' = resolve_var dicts.vctx ctx.vctx v in ok' @@ R.Var v'
   | P.Con (qcon, es)       -> 
-    let* con' = resolve_dcon dicts dctx qcon
+    let* con' = resolve_dcon dicts.dctx ctx.dctx qcon
     and* es'  = Rst.Par.map es ~f:tr in
     ok' @@ R.Con (con', es')
 
@@ -497,7 +523,7 @@ let rec translate_expr (((tctx, dctx, vctx) as ctx) : Ctx.t) dicts (expr : P.exp
  * value defintions into two separate bins without needing to worry about accidental
  * captures.
  *)
-and translate_decls (tctx, dctx, vctx) dicts decls =
+and translate_decls (ctx : Ctx.t)  dicts decls =
 
   let tycon_prefix = TyConId.of_string "T" in
   let dcon_prefix  = DConId.of_string  "D" in
@@ -588,14 +614,18 @@ and translate_decls (tctx, dctx, vctx) dicts decls =
     )
   in
 
-  let ((tctx', dctx', vctx') as ctx') = 
+  let ctx' = 
     let set_list ctx rs = 
       let set ctx twin = 
         Map.set ctx ~key:(Node.elem (fst twin)) ~data:(snd twin) 
       in
       List.fold rs ~init:ctx ~f:set
     in
-    (set_list tctx ts, set_list dctx ds, set_list vctx vs)
+    {
+      Ctx.tctx = set_list ctx.tctx ts;
+      Ctx.dctx = set_list ctx.dctx ds;
+      Ctx.vctx = set_list ctx.vctx vs;
+    }
   in
 
   let* (tycons', decls') = 
@@ -616,15 +646,15 @@ and translate_decls (tctx, dctx, vctx) dicts decls =
         fun decl ->
           match Node.elem decl with
           | P.Alias ((con, tvars), typ) ->
-            let* con' = lookup_binder tctx' con
-            and* typ' = translate_typ ctx' dicts typ in
+            let* con' = lookup_binder ctx'.tctx con
+            and* typ' = translate_typ ctx'.tctx dicts typ in
             ok @@ `TyCon (R.Alias ((con', tvars), typ'))
           | P.TyCon ((con, tvars), ctors) ->
-            let* con' = lookup_binder tctx' con
+            let* con' = lookup_binder ctx'.tctx con
             and* ctors' = Rst.Par.map ctors ~f:(
               fun (dcon, typs) -> 
-                let* dcon' = lookup_binder dctx' dcon
-                and* typs' = Rst.Par.map ~f:(translate_typ ctx' dicts) typs in
+                let* dcon' = lookup_binder ctx'.dctx dcon
+                and* typs' = Rst.Par.map ~f:(translate_typ ctx'.tctx dicts) typs in
                 ok @@ (dcon', typs')
             ) in
             ok @@ `TyCon (R.TyCon ((con', tvars), ctors'))
@@ -632,8 +662,8 @@ and translate_decls (tctx, dctx, vctx) dicts decls =
             (* Type annotations have been processe in their respective binder locations. *)
             ok `Annot
           | P.Fun ((var_node, pats), e) -> 
-            let* (vctx'', _) = bind_pats vctx' pats in
-            let ctx'' = (tctx', dctx', vctx'') in
+            let* (vctx'', _) = bind_pats ctx'.vctx pats in
+            let ctx'' = {ctx' with vctx=vctx''} in
             let* pats' = Rst.Par.map pats ~f:(translate_pat annots ctx'' dicts)
             and* f'    = lookup_binder vctx'' var_node 
             and* e'    = translate_expr ctx'' dicts e in (
@@ -642,7 +672,7 @@ and translate_decls (tctx, dctx, vctx) dicts decls =
                 ok @@ `Val (R.Fun ((f', None), pats', e'))
               | Some (f_annot, typ) -> 
                 let* f_annot' = lookup_binder vctx'' f_annot 
-                and* typ' = translate_typ ctx' dicts typ in
+                and* typ' = translate_typ ctx'.tctx dicts typ in
                 ok @@ `Val (R.Fun ((f', Some (f_annot', typ')), pats', e'))
             )
           | P.Pat (pat, e) -> 
@@ -684,8 +714,8 @@ let infersig_from_decls (decls : P.decl' list) =
 let resolve_mod ~modpath mctx (t : P.m) : R.m rslt = 
   let (P.Mod (mdecl, imports, decls)) = t in
   let imports = resolve_imports imports in
-  let* (tycon_map, dcon_map, fvar_map) = imports_to_sigs mctx imports in
-  let* (_, (tycons', vals')) = translate_decls Ctx.empty (tycon_map, dcon_map, fvar_map) decls in
+  let* dicts = imports_to_sigs mctx imports in
+  let* (_, (tycons', vals')) = translate_decls Ctx.empty dicts decls in
   let m_sigmask = 
     match mdecl with 
     | None -> sigmask_any
