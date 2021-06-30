@@ -131,18 +131,6 @@ struct
   type dconref'  = dconref node
   type tyconref' = tyconref node
 
-  type pat = 
-    | Var        of var'
-    | Any
-    | Unit 
-    | EmptyList
-    | Literal    of lit'
-    | List       of pat node list
-    | Tuple      of pat node list
-    | Con        of dconref' * (pat node list)
-
-  type pat' = pat node
-
   (* TODO: implement tvar/rvar resolution *)
   and typ = 
     | TVar   of tvar'
@@ -160,9 +148,21 @@ struct
 
   and typ' = typ node
 
-  type op   = ElAst.Syntax.op
-
   type annot = var' * typ' 
+
+  type pat = 
+    | Var        of var' * (annot option)
+    | Any
+    | Unit 
+    | EmptyList
+    | Literal    of lit'
+    | List       of pat node list
+    | Tuple      of pat node list
+    | Con        of dconref' * (pat node list)
+
+  type pat' = pat node
+
+  type op   = ElAst.Syntax.op
 
   type expr = 
     (* Control flow constructs *)
@@ -193,8 +193,8 @@ struct
     | Alias of (tycon' * tvar' list) * typ'
 
   and decl =
-    | Pat   of annot list * pat' * expr'
-    | Fun   of annot option * (var' * (pat' list)) * expr'
+    | Pat   of pat' * expr'
+    | Fun   of (var' * annot option) * (pat' list) * expr'
 
   (* This module introduces "signature" ("sigt") and "signature mask" ("sigmask") 
    * 
@@ -240,6 +240,18 @@ struct
     tycons  : typdecl list;
     vals    : decl list;
   }
+
+  let rec annots_in_pat (pat : pat') =
+    match Node.elem pat with 
+    | Any
+    | Unit 
+    | EmptyList
+    | Literal _           -> []
+    | Var (_, None)       -> []
+    | Var (_, Some annot) -> [annot]
+    | List pats           -> Core.List.concat_map pats ~f:annots_in_pat
+    | Tuple pats          -> Core.List.concat_map pats ~f:annots_in_pat
+    | Con (_, pats)       -> Core.List.concat_map pats ~f:annots_in_pat
 end
 
 module Alias = 
@@ -249,7 +261,7 @@ struct
   module Pat =
   struct
     type pat = Syntax.pat =
-      | Var        of var'
+      | Var        of var' * annot option
       | Any
       | Unit 
       | EmptyList
@@ -355,7 +367,12 @@ struct
       List.map tycons ~f:(fun tycon -> sprintf "TyCon %s" (typdecl_to_string tycon))
     in
     let vals_strings = 
-      List.map vals ~f:(fun val_decl -> sprintf "Val %s" (decl_to_string val_decl))
+      List.concat_map vals ~f:(
+        fun val_decl -> 
+          let (a_strs, v_str) = decl_annot_to_string val_decl in
+          let a_strs' = List.map a_strs ~f:(fun s -> "Annot " ^ s) in
+          a_strs' @ [ sprintf "Val %s" v_str ]
+        )
     in
     sprintf ("module %s : sig {%s} = let open {%s} in struct {tycons {%s};vals {%s}}") 
             (Core.Option.value_map modid ~default:"?" ~f:path_to_string)
@@ -419,22 +436,34 @@ struct
               (concat_map ", " tvar_to_string tvars)
               (typ_to_string typ)
 
-  and decl_to_string valbind : string = 
+  and annot_to_string annot : string = 
+    sprintf "%s :: %s" (var_to_string (fst annot)) (typ_to_string (snd annot))
+
+  (* Annotations are to be put on their own lines *)
+  and decl_annot_to_string valbind : string list * string = 
     (* Annotations are not supported yet *)
     match valbind with 
-    | Pat (annots, pat, e) -> 
-      assert (List.is_empty annots);
-      sprintf "%s = %s" (pat_to_string pat) (expr_to_string e)
-    | Fun (annot, (f, pats), e) -> 
-      assert (Option.is_none annot);
-      sprintf "Fun %s %s = %s" 
-              (var_to_string f)
-              (concat_map " " pat_to_string pats)
-              (expr_to_string e)
+    | Pat (pat, e) -> 
+      let a_strs  = List.map (annots_in_pat pat) ~f:annot_to_string in
+      let e_str   = sprintf "%s = %s" (pat_to_string pat) (expr_to_string e) in
+      let a_strs' = List.map a_strs ~f:(fun t -> "Annot " ^ t) in
+      (a_strs', e_str)
+    | Fun ((f, annot_opt), pats, e) -> 
+      let fun_str = 
+        sprintf "Fun %s %s = %s" 
+          (var_to_string f)
+          (concat_map " " pat_to_string pats)
+          (expr_to_string e);
+      in
+      match annot_opt with 
+      | None       -> ([], fun_str)
+      | Some annot -> ([annot_to_string annot], fun_str)
       
-  and pat_to_string (pat : pat') = 
+  and pat_to_string ?(with_annot=false) (pat : pat') = 
     match Node.elem pat with
-    | Var var      -> var_to_string var
+    | Var (var, None) -> var_to_string var
+    | Var (var, Some _) when not with_annot -> var_to_string var
+    | Var (var, Some annot) -> (var_to_string var ^ ": " ^ typ_to_string (snd annot))
     | Any          -> "_"
     | Unit         -> "()"
     | EmptyList    -> "[]"
@@ -472,8 +501,14 @@ struct
     | Let ((tycons, vals), e)     -> 
       let type_strings = List.map ~f:typdecl_to_string tycons 
                       |> List.map ~f:(fun s -> "TyCon " ^ s) in
-      let vals_strings = List.map ~f:decl_to_string vals 
-                      |> List.map ~f:(fun s -> "Val " ^ s) in
+      let vals_strings = 
+        List.concat_map vals ~f:(
+          fun val_decl -> 
+            let (a_strs, v_str) = decl_annot_to_string val_decl in
+            let a_strs' = List.map a_strs ~f:(fun t -> "Annot " ^ t) in
+            a_strs' @ [ sprintf "Val %s" v_str ]
+          )
+      in
       sprintf "let {%s} in %s" 
               (String.concat ~sep:";" (type_strings @ vals_strings)) 
               (pp e) 

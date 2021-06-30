@@ -1,3 +1,5 @@
+import Browser
+
 main =
   Browser.sandbox { init = 0, update = update, view = view }
 
@@ -21,3 +23,16 @@ p = let x = 1 in x
 q = let x = 1 in let y = x in let z = y in z
 
 r = let x = let y = let z = 1 in z in y in x
+
+a : Int
+a = 1
+
+b = (1, 2)
+b : (Int, Int)
+
+d = let c : Int 
+        c = 1 
+     in c
+
+f : Int -> Int
+f x = x

@@ -68,6 +68,8 @@ type err =
   | VarIdRedefined        of R.varid'   * R.varid' 
   | TyConIdRedefined      of R.tyconid' * R.tyconid'
   | DConIdRedefined       of R.dconid'  * R.dconid'
+  | RepeatedAnnotation     of (P.var' * P.typ') * (P.var' * P.typ')
+  | DanglingTypeAnnotation of (P.var' * P.typ')
 
 type 'a rslt = ('a, warn, err) Rst.t
 
@@ -116,6 +118,8 @@ struct
   let empty_vctx = VarId.Map.empty
   let empty : t = (empty_tctx, empty_dctx, empty_vctx)
 end
+
+type amap = (R.varid' * P.typ') VarId.Map.t
 
 let lookup_binder ctx id_node : ('binder, 'id) R.twin' rslt =
   let (id, pos) = Node.both id_node in
@@ -363,10 +367,10 @@ let bind_pats ?prefix vctx pats =
     ) 
   in ok @@ (ctx', varids')
 
-let rec translate_pat ((_tctx, dctx, vctx) as ctx) dicts (pat : P.pat') =
+let rec translate_pat (amap : amap) ((_tctx, dctx, vctx) as ctx) dicts (pat : P.pat') =
   let (elem, pos) = Node.both pat in
   let ok' pat = ok @@ Node.node pat pos in
-  let tr  = translate_pat ctx dicts in
+  let tr  = translate_pat amap ctx dicts in
   let trs = Rst.Par.map ~f:tr  in
   match elem with 
   | P.Any         -> ok' R.Any
@@ -375,13 +379,23 @@ let rec translate_pat ((_tctx, dctx, vctx) as ctx) dicts (pat : P.pat') =
   | P.Literal lit -> ok' @@ A.Pat.Literal lit
   | P.List pats   -> let* pats' = trs pats in ok' @@ A.Pat.List pats' 
   | P.Tuple pats  -> let* pats' = trs pats in ok' @@ A.Pat.Tuple pats'
-  | P.Var v       -> let* twin = lookup_binder vctx v in ok' @@ A.Pat.Var twin 
+  | P.Var v       -> 
+    let* twin = lookup_binder vctx v in (
+      match Map.find amap (Node.elem v) with
+      | None -> ok' @@ A.Pat.Var (twin, None)
+      | Some (var, typ) -> 
+        (* This should always succeed since we have checked all annotations are placed on
+         * valid binders of this scope *)
+        let* twin'  = lookup_binder vctx var
+        and* typ'  = translate_typ ctx dicts typ in
+        ok' @@ A.Pat.Var (twin, Some (twin', typ'))
+    )
   | P.Con (qcon, pats) -> 
     let* con'  = resolve_dcon dicts dctx qcon
     and* pats' = Rst.Par.map pats ~f:tr in
     ok' @@ A.Pat.Con (con', pats')
 
-let rec translate_typ ((tctx, _, _) as ctx) dicts (typ : P.typ') =
+and translate_typ ((tctx, _, _) as ctx) dicts (typ : P.typ') =
   let (elem, pos) = Node.both typ in
   let ok' typ' = ok @@ Node.node typ' pos in
   let tr = translate_typ ctx dicts in
@@ -424,14 +438,16 @@ let rec translate_expr (((tctx, dctx, vctx) as ctx) : Ctx.t) dicts (expr : P.exp
     let* branches' = Rst.Par.map branches ~f:(
       fun (pat, expr) -> 
         let* (vctx', _) = bind_pats vctx [pat] in
-        let* pat'  = translate_pat (tctx, dctx, vctx') dicts pat 
+        (* There is no syntax for Elm to annotate types for binders in cases *)
+        let* pat'  = translate_pat  VarId.Map.empty (tctx, dctx, vctx') dicts pat 
         and* expr' = translate_expr (tctx, dctx, vctx') dicts expr in
         ok (pat', expr')
     ) in 
     ok' @@ R.Case (e', branches')
   | P.Lambda (pats, e) -> 
     let* (vctx', _) = bind_pats vctx pats in
-    let* pats' = Rst.Par.map pats ~f:(translate_pat (tctx, dctx, vctx') dicts)
+    (* Elm does not have syntax to annotate type for lambda arguments *)
+    let* pats' = Rst.Par.map pats ~f:(translate_pat VarId.Map.empty (tctx, dctx, vctx') dicts)
     and* e' = translate_expr (tctx, dctx, vctx') dicts e in
     ok' @@ R.Lambda (pats', e')
   | P.If (e0, (e1, e2)) ->
@@ -497,10 +513,10 @@ and translate_decls (tctx, dctx, vctx) dicts decls =
    * - Definitions are then added to the context in one go, where conflictions with existing
    *   definitions are resolved by new definitions shadowing previous ones.
    *)
-  let* (ts, ds, vs, _annots) = 
+  let* (ts, ds, vs, (annots : amap)) = 
     let eq' f n1 n2  = f (Node.elem n1) (Node.elem (fst n2)) = 0 in
     (* They should ideally be abstracted out but type inference are honestly broken for them *)
-    Rst.Seq.fold_right decls ~init:(ok ([], [], [], [])) ~f:(
+    Rst.Seq.fold_right decls ~init:(ok ([], [], [], VarId.Map.empty)) ~f:(
       fun (decl : P.decl') (ts, ds, vs, annots) ->
         match Node.elem decl with 
         | P.Alias ((tcon, _), _) -> 
@@ -525,7 +541,13 @@ and translate_decls (tctx, dctx, vctx) dicts decls =
           in
           ok (ts', ds', vs, annots)
         | P.Annot (varid, typ) -> 
-          ok (ts, ds, vs, (varid, typ)::annots)
+          begin 
+            match Map.add annots ~key:(Node.elem varid) ~data:(varid, typ) with
+            | `Ok annots' -> ok (ts, ds, vs, annots')
+            | `Duplicate  -> 
+              let existing = Map.find_exn annots (Node.elem varid) in
+              err @@ RepeatedAnnotation ((varid, typ), existing)
+          end
         | P.Fun ((f, _), _) -> 
           let* vs' = 
             match List.find ~f:(eq' VarId.compare f) vs with
@@ -544,6 +566,25 @@ and translate_decls (tctx, dctx, vctx) dicts decls =
             ) 
           in
           ok (ts, ds, vs', annots)
+    )
+  in
+
+  (* Checks that type annotations annotates some binder of current scope and only binder
+   * of the current scope. If a binder references a non-existing binder this would not be a
+   * fatal flaw as it does not impact program dynamic behavior. However, the type may be malformed
+   * and we won't know that until type checking. Since we match type annotations to thier binders 
+   * we have to throw a way unmatched type annotations, leaving us the possibility of accepting a
+   * program with malformed type annotations. To prevent this from happening, we reject dangling 
+   * annotations immediately.
+   * 
+   * This would not be a problem for Elm programs as Elm compiler requires type annotaitions to directly
+   * precede their respective definitions. *)
+  let* _ = 
+    Rst.Par.map (Map.keys annots) ~f:(fun k -> 
+      if List.exists vs ~f:(fun (id, _) -> VarId.compare (Node.elem id) k = 0) then 
+        ok true
+      else
+        err @@ DanglingTypeAnnotation (Map.find_exn annots k)
     )
   in
 
@@ -568,7 +609,7 @@ and translate_decls (tctx, dctx, vctx) dicts decls =
             match decl with 
             | `TyCon t  -> (t::tycons, vals)
             | `Val   v  -> (tycons, v::vals) 
-            | `Annot _a -> (tycons, vals) 
+            | `Annot    -> (tycons, vals) 
         )
       )
       ~fmap:(
@@ -587,20 +628,28 @@ and translate_decls (tctx, dctx, vctx) dicts decls =
                 ok @@ (dcon', typs')
             ) in
             ok @@ `TyCon (R.TyCon ((con', tvars), ctors'))
-          | P.Annot (id, typ) -> 
-            ok @@ `Annot (id, typ)
+          | P.Annot (_id, _typ) -> 
+            (* Type annotations have been processe in their respective binder locations. *)
+            ok `Annot
           | P.Fun ((var_node, pats), e) -> 
             let* (vctx'', _) = bind_pats vctx' pats in
             let ctx'' = (tctx', dctx', vctx'') in
-            let* pats' = Rst.Par.map pats ~f:(translate_pat ctx'' dicts)
+            let* pats' = Rst.Par.map pats ~f:(translate_pat annots ctx'' dicts)
             and* f'    = lookup_binder vctx'' var_node 
-            and* e'    = translate_expr ctx'' dicts e in
-            ok @@ `Val (R.Fun (None, (f', pats'), e'))
+            and* e'    = translate_expr ctx'' dicts e in (
+              match Map.find annots (Node.elem var_node) with
+              | None -> 
+                ok @@ `Val (R.Fun ((f', None), pats', e'))
+              | Some (f_annot, typ) -> 
+                let* f_annot' = lookup_binder vctx'' f_annot 
+                and* typ' = translate_typ ctx' dicts typ in
+                ok @@ `Val (R.Fun ((f', Some (f_annot', typ')), pats', e'))
+            )
           | P.Pat (pat, e) -> 
             (* The input has already binded pat *)
             let* e'   = translate_expr ctx' dicts e
-            and* pat' = translate_pat  ctx' dicts pat in 
-            ok @@ `Val (R.Pat ([], pat', e'))
+            and* pat' = translate_pat  annots ctx' dicts pat in 
+            ok @@ `Val (R.Pat (pat', e'))
       ) 
   in
   (* Returns 
