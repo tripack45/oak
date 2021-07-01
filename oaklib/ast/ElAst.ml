@@ -32,6 +32,12 @@ sig
   val map_attr  : ('b -> 'c) -> ('a, 'b) t -> ('a, 'c) t
   val fold_elem  : ('a -> 'c) -> ('a, 'b) t -> 'c
   val fold : ('a -> 'b -> 'c) -> ('a, 'b) t -> 'c
+
+  val fold2 : f:('a -> 'b -> 'c) ->  ('a, 'c) t -> ('b, 'd) t -> 'c
+
+  val compare      : ('a -> 'a -> int) -> ('a, 'b) t -> ('a, 'c) t -> int
+  val eq           : ('a -> 'a -> bool) -> ('a, 'b) t -> ('a, 'c) t -> bool
+  val eq_of_compare: ('a -> 'a -> int) -> ('a, 'b) t -> ('a, 'c) t -> bool
 end = 
 struct
   type ('a, 'b) t = 'a * 'b
@@ -43,6 +49,11 @@ struct
   let map_attr f (elem, attr) = (elem, f attr)
   let fold_elem f (e, _attr) = f e 
   let fold f (e, attr) = f e attr
+
+  let fold2 ~f x y = f (elem x) (elem y)
+  let compare f = fold2 ~f
+  let eq = compare
+  let eq_of_compare f x y = (compare f x y = 0)
 end 
 
 module type IDENT = sig
