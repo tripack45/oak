@@ -88,6 +88,7 @@ let run ?(max_depth=5) ?soft (Mod (_mdecl, _imports, decls)) : result =
     let (decl, pos) = both decl in
     match decl with 
     | Annot _  
+    | Port _  
     | TyCon _ 
     | Alias _ -> ok 0
     | Pat (pat, e) -> 

@@ -198,6 +198,7 @@ struct
   and decl =
     | Pat   of pat' * expr'
     | Fun   of (var' * annot option) * (pat' list) * expr'
+    | Port  of var' * typ'
 
   (* This module introduces "signature" ("sigt") and "signature mask" ("sigmask") 
    * 
@@ -451,6 +452,8 @@ struct
       let e_str   = sprintf "Val %s = %s" (pat_to_string pat) (expr_to_string e) in
       let a_strs' = List.map a_strs ~f:(fun t -> "Annot " ^ t) in
       (a_strs', e_str)
+    | Port (var, typ) -> 
+      ([sprintf "Port %s %s" (var_to_string var) (typ_to_string typ)], "")
     | Fun ((f, annot_opt), pats, e) -> 
       let fun_str = 
         sprintf "Fun %s %s = %s" 

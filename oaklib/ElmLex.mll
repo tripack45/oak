@@ -21,6 +21,7 @@ rule initial =
   | "module"      { T.MODULE }
   | "exposing"    { T.EXPOSING }
   | "as"          { T.AS }
+  | "port"        { T.PORT }
   | "case"        { T.CASE }
   | "of"          { T.OF }
   | "let"         { T.LET }

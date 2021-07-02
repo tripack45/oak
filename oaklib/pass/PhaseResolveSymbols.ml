@@ -69,6 +69,7 @@ type err =
   | TyConIdRedefined      of R.tyconid' * R.tyconid'
   | DConIdRedefined       of R.dconid'  * R.dconid'
   | RepeatedAnnotation     of (P.var' * P.typ') * (P.var' * P.typ')
+  | RepeatedPort     of (P.var' * P.typ') * (P.var' * P.typ')
   | DanglingTypeAnnotation of (P.var' * P.typ')
   | RepeatedTypeVar        of P.tvar' * P.tycon' 
 
@@ -631,11 +632,12 @@ and translate_decls (ctx : Ctx.t) dicts decls =
    * - Definitions are then added to the context in one go, where conflictions with existing
    *   definitions are resolved by new definitions shadowing previous ones.
    *)
-  let* (ts, ds, vs, (annots : amap)) = 
+  (* collect port; TODO *)
+  let* (ts, ds, vs, (annots : amap), (_ports : amap)) = 
     let eq' f n1 n2  = f (Node.elem n1) (Node.elem (fst n2)) = 0 in
     (* They should ideally be abstracted out but type inference are honestly broken for them *)
-    Rst.Seq.fold decls ~init:(ok ([], [], [], VarId.Map.empty)) ~f:(
-      fun (ts, ds, vs, annots) (decl : P.decl') ->
+    Rst.Seq.fold decls ~init:(ok ([], [], [], VarId.Map.empty, VarId.Map.empty)) ~f:(
+      fun (ts, ds, vs, annots, ports) (decl : P.decl') ->
         match Node.elem decl with 
         | P.Alias ((tcon, _), _) -> 
           let* ts' = 
@@ -643,7 +645,7 @@ and translate_decls (ctx : Ctx.t) dicts decls =
             | None     -> ok  @@ (tcon, TyCon.fresh ~id:tycon_prefix ())::ts
             | Some dup -> err @@ TyConIdRedefined (tcon, fst dup)
           in 
-          ok (ts', ds, vs, annots)
+          ok (ts', ds, vs, annots, ports)
         | P.TyCon ((tcon, _), ctors) ->
           let* ts' = 
             match List.find ~f:(eq' TyConId.compare tcon) ts with
@@ -657,14 +659,25 @@ and translate_decls (ctx : Ctx.t) dicts decls =
                 | Some dup -> err @@ DConIdRedefined (dcon, fst dup)
             ) 
           in
-          ok (ts', ds', vs, annots)
+          ok (ts', ds', vs, annots, ports)
         | P.Annot (varid, typ) -> 
           begin 
             match Map.add annots ~key:(Node.elem varid) ~data:(varid, typ) with
-            | `Ok annots' -> ok (ts, ds, vs, annots')
+            | `Ok annots' -> ok (ts, ds, vs, annots', ports)
             | `Duplicate  -> 
               let existing = Map.find_exn annots (Node.elem varid) in
               err @@ RepeatedAnnotation ((varid, typ), existing)
+          end
+        (* port; will change ; TODO *)
+        | P.Port (varid, typ) -> 
+          begin 
+            match Map.add ports ~key:(Node.elem varid) ~data:(varid, typ) with
+            | `Ok _ports' -> 
+              (* ok (ts, ds, vs, annots, ports') *)
+              failwith "Unimplemented: Port Resolved"
+            | `Duplicate  -> 
+              let existing = Map.find_exn ports (Node.elem varid) in
+              err @@ RepeatedPort ((varid, typ), existing)
           end
         | P.Fun ((f, _), _) -> 
           let* vs' = 
@@ -672,7 +685,7 @@ and translate_decls (ctx : Ctx.t) dicts decls =
             | None     -> ok  @@ (f, Var.fresh ~id:f_prefix ())::vs
             | Some dup -> err @@ VarIdRedefined (f, fst dup)
           in
-          ok (ts, ds, vs', annots)
+          ok (ts, ds, vs', annots, ports)
         | P.Pat (pat, _) -> 
           let* xs  = collect_binders pat in
           let* vs' = 
@@ -683,7 +696,7 @@ and translate_decls (ctx : Ctx.t) dicts decls =
                 | Some dup -> err @@ VarIdRedefined (v, fst dup)
             ) 
           in
-          ok (ts, ds, vs', annots)
+          ok (ts, ds, vs', annots, ports)
     )
   in
 
@@ -734,6 +747,7 @@ and translate_decls (ctx : Ctx.t) dicts decls =
             | `TyCon t  -> (t::tycons, vals)
             | `Val   v  -> (tycons, v::vals) 
             | `Annot    -> (tycons, vals) 
+            | `Port     -> (tycons, vals) 
         )
       )
       ~fmap:(
@@ -778,8 +792,12 @@ and translate_decls (ctx : Ctx.t) dicts decls =
             ) in
             ok @@ `TyCon (R.TyCon ((con', tvars'), ctors'))
           | P.Annot (_id, _typ) -> 
-            (* Type annotations have been processe in their respective binder locations. *)
+            (* Type annotations have been processed in their respective binder locations. *)
             ok `Annot
+          | P.Port (_id, _typ) -> 
+            (* Port should be collected here; wait until type annots implemented *)
+            (* ok `Port *)
+            failwith "Unimplemented: Port Resolved"
           | P.Fun ((var_node, pats), e) -> 
             let annot_opt = Map.find annots (Node.elem var_node) in
             let* (vctx'', _) = bind_pats ctx'.vctx pats in
@@ -829,6 +847,7 @@ let infersig_from_decls (decls : P.decl' list) =
           let sig_tycons' = (con, [])::sig_tycons in
           (sig_tycons', sig_vals)
         | P.Annot _ -> (sig_tycons, sig_vals)
+        | P.Port _ -> (sig_tycons, sig_vals)
         | P.Fun ((var, _), _) -> (sig_tycons, var::sig_vals)
         | P.Pat (pat, _) -> 
           (* When we extract sigs from decls, decls would have been 

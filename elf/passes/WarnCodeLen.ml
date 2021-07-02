@@ -209,6 +209,7 @@ struct
       match decl with 
       (* Annotations wouldn't be counted *)
       | Annot _ -> bot
+      | Port _ -> bot
       | TyCon ((tycon', tvar's), branches) -> 
         let brance_size (dcon', typ') = merge_results @@ dcon_size dcon' :: (List.map typ_size typ') in
         let var_ = merge_results @@ List.map tvar_size tvar's

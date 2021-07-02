@@ -1,6 +1,6 @@
 type t = 
     (* Keywords *)
-    | MODULE | EXPOSING | IMPORT | AS
+    | MODULE | EXPOSING | IMPORT | AS | PORT
     | CASE   | OF
     | LET    | IN
     | IF     | THEN | ELSE 
@@ -87,6 +87,7 @@ let to_string tok=
 | MODULE  -> "module"
 | EXPOSING -> "exposing"
 | AS      -> "as"
+| PORT    -> "port"
 | CASE    -> "case"
 | OF      -> "of"
 | LET     -> "let"
@@ -152,6 +153,7 @@ let to_parse_string tok =
 | MODULE   -> "MODULE"
 | EXPOSING -> "EXPOSING"
 | AS       -> "AS"
+| PORT     -> "PORT"
 | CASE     -> "CASE"
 | OF       -> "OF"
 | LET      -> "LET"

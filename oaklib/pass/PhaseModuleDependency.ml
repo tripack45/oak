@@ -65,6 +65,9 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
     | Annot (var_node, typ_node) ->
       let+ typ_node' = resolve_typ' typ_node in
       Annot (var_node, typ_node')
+    | Port (var_node, typ_node) ->
+      let+ typ_node' = resolve_typ' typ_node in
+      Port (var_node, typ_node')
     | TyCon ((con_node, var_nodes), ctors) ->
       let+ ctors' = R.Par.map ctors ~f:(
         fun (con_node, typ_nodes) -> 

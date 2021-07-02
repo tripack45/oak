@@ -225,11 +225,16 @@ struct
    * The difference of typ and row variable is not one of syntatic but one of semantic, 
    * that is, type and row variables both fall into the syntax category of "type variable", 
    * but they belongs to a different "kind" upon type checking. 
+   *
+   * Port is an annotation of ported js function. Since no function definition is attached
+   * to a port declaration, it's treated as a unique decl.
    *)
   type decl =
     | TyCon of (tycon' * tvar' list) * ((dcon' * typ' list) list)
     | Alias of (tycon' * tvar' list) * typ'
     | Annot of var' * typ'
+    (* Port annotation *)
+    | Port  of var' * typ' 
     | Pat   of pat' * expr'
     | Fun   of (var' * (pat' list)) * expr'
 
@@ -376,6 +381,7 @@ struct
       | TyCon of (tycon' * tvar' list) * ((dcon' * typ' list) list)
       | Alias of (tycon' * tvar' list) * typ'
       | Annot of var' * typ'
+      | Port of var' * typ'
       | Pat   of pat' * expr'
       | Fun   of (var' * (pat' list)) * expr'
 
@@ -513,6 +519,7 @@ struct
               (concat_map " " tvar_to_string vars)
               (typ_to_string typ)
     | Annot (var, t) -> "annot " ^ var_to_string var ^ " :: " ^ typ_to_string t
+    | Port  (var, t) -> "port " ^ var_to_string var ^ " :: " ^ typ_to_string t
     | Pat   (pat, e) -> 
       sprintf "val %s = %s" 
                     (pat_to_string pat) 

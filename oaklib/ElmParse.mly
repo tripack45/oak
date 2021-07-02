@@ -120,7 +120,7 @@ open Util
 %}
 
 (* keywords *)
-%token IMPORT MODULE EXPOSING AS
+%token IMPORT MODULE EXPOSING AS PORT
 %token CASE OF 
 %token LET IN 
 %token IF THEN ELSE
@@ -185,7 +185,7 @@ main:
 | LDELIM body RDELIM                                                                { Module.Mod (None, fst $2, snd $2) }
 
 module_decl :
-| MODULE c=CONID ex=option(exposing)                                                { mod_decl (mcon c $loc(c), ex) $loc }
+| option(PORT) MODULE c=CONID ex=option(exposing)                                   { mod_decl (mcon c $loc(c), ex) $loc }
 
 body:
 | impdecl SEMI body                                                                 { add_import $3 $1 }
@@ -222,6 +222,7 @@ udecl:
 
 gendecl :
 | var OF_TYPE type_                                                                 { node (Decl.Annot ($1, $3)) $loc }
+| PORT var OF_TYPE type_                                                            { node (Decl.Port  ($2, $4)) $loc }
 
 typdecl:
 | TYPE ALIAS simpletype EQ type_                                                    { node (Decl.Alias ($3, $5)) $loc }
