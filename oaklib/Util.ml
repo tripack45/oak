@@ -292,6 +292,7 @@ struct
                 fun (l, m) -> return @@ m :: l
               )
           )
+        |> bind ~f:(fun l -> return @@ List.rev l)
 
         let map_then xs ~fmap ~fthen = 
           map xs ~f:fmap |> bind ~f:(fun xs' -> return @@ fthen xs')
@@ -326,18 +327,21 @@ struct
       struct
         let fold_left xs ~init ~f = 
           List.fold_left xs ~init ~f:(
-            fun accum x -> bind accum ~f:(fun accum' ->  f accum' x)
+            fun accum x -> bind accum ~f:(fun accum' -> f accum' x)
           )
+
         let fold_right xs ~init ~f = 
           List.fold_right xs ~init ~f:(
             fun x accum -> bind accum ~f:(fun accum' -> f x accum')
+
           )
         let fold = fold_left
+
         let map xs ~f =
           fold_left xs ~init:(return []) ~f:(
             fun xs' x -> bind (f x) ~f:(fun x' -> return (x'::xs'))
           ) 
-          |> bind ~f:(fun xs -> return (List.rev xs))
+          |> bind ~f:(fun l -> return @@ List.rev l)
 
         let fold_map xs ~init ~f =
           let init = bind init ~f:(fun i -> return @@ (i, [])) in
@@ -346,6 +350,7 @@ struct
                 fun (accum', x') -> return @@ (accum', x'::xs')
               )
             )
+          |> bind ~f:(fun (acc, xs) -> return (acc, List.rev xs))
 
         let folding_map xs ~init ~f = 
           bind (fold_map xs ~init ~f) ~f:(fun (_, xs') -> return xs')
@@ -354,9 +359,10 @@ struct
           fold xs ~init:(return []) ~f:(
             fun xs' x -> bind (f x) ~f:(
               function Some x' -> return @@ x'::xs'
-                    | None    -> return xs'
+                    | None     -> return xs'
             )
           )
+          |> bind ~f:(fun l -> return @@ List.rev l)
 
         let filter xs ~f = 
           filter_map xs ~f:(

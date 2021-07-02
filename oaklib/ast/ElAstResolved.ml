@@ -135,8 +135,7 @@ struct
    * Similar to int variables are just variables of int type *)
   type rvar' = tvar'
 
-  (* TODO: implement tvar/rvar resolution *)
-  and typ = 
+  type typ = 
     | TVar   of tvar'
     | Unit
     | TyCon  of tyconref'
@@ -375,8 +374,7 @@ struct
       List.concat_map vals ~f:(
         fun val_decl -> 
           let (a_strs, v_str) = decl_annot_to_string val_decl in
-          let a_strs' = List.map a_strs ~f:(fun s -> "Annot " ^ s) in
-          a_strs' @ [ sprintf "Val %s" v_str ]
+          a_strs @ [ v_str ]
         )
     in
     sprintf ("module %s : sig {%s} = let open {%s} in struct {tycons {%s};vals {%s}}") 
@@ -450,7 +448,7 @@ struct
     match valbind with 
     | Pat (pat, e) -> 
       let a_strs  = List.map (annots_in_pat pat) ~f:annot_to_string in
-      let e_str   = sprintf "%s = %s" (pat_to_string pat) (expr_to_string e) in
+      let e_str   = sprintf "Val %s = %s" (pat_to_string pat) (expr_to_string e) in
       let a_strs' = List.map a_strs ~f:(fun t -> "Annot " ^ t) in
       (a_strs', e_str)
     | Fun ((f, annot_opt), pats, e) -> 
@@ -462,7 +460,7 @@ struct
       in
       match annot_opt with 
       | None       -> ([], fun_str)
-      | Some annot -> ([annot_to_string annot], fun_str)
+      | Some annot -> (["Annot " ^ annot_to_string annot], fun_str)
       
   and pat_to_string ?(with_annot=false) (pat : pat') = 
     match Node.elem pat with
@@ -510,8 +508,7 @@ struct
         List.concat_map vals ~f:(
           fun val_decl -> 
             let (a_strs, v_str) = decl_annot_to_string val_decl in
-            let a_strs' = List.map a_strs ~f:(fun t -> "Annot " ^ t) in
-            a_strs' @ [ sprintf "Val %s" v_str ]
+            a_strs @ [ v_str ]
           )
       in
       sprintf "let {%s} in %s" 

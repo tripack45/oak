@@ -512,7 +512,7 @@ struct
               (tycon_to_string con)
               (concat_map " " tvar_to_string vars)
               (typ_to_string typ)
-    | Annot (var, t) -> var_to_string var ^ " :: " ^ typ_to_string t
+    | Annot (var, t) -> "annot " ^ var_to_string var ^ " :: " ^ typ_to_string t
     | Pat   (pat, e) -> 
       sprintf "val %s = %s" 
                     (pat_to_string pat) 
@@ -565,7 +565,7 @@ struct
     let expr_str =
       match Node.elem e with
       | Let (decls, e)     -> 
-        let decl_strs = "{" ^ concat_map "; " decl_to_string decls ^ "}" in
+        let decl_strs = "{" ^ concat_map ";" decl_to_string decls ^ "}" in
         sprintf "let %s in %s" decl_strs (pp e) 
       | Case (e, branches) -> 
         let arrow (p, e) = pat_to_string p ^ " -> " ^ pp e in

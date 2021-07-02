@@ -634,8 +634,8 @@ and translate_decls (ctx : Ctx.t) dicts decls =
   let* (ts, ds, vs, (annots : amap)) = 
     let eq' f n1 n2  = f (Node.elem n1) (Node.elem (fst n2)) = 0 in
     (* They should ideally be abstracted out but type inference are honestly broken for them *)
-    Rst.Seq.fold_right decls ~init:(ok ([], [], [], VarId.Map.empty)) ~f:(
-      fun (decl : P.decl') (ts, ds, vs, annots) ->
+    Rst.Seq.fold decls ~init:(ok ([], [], [], VarId.Map.empty)) ~f:(
+      fun (ts, ds, vs, annots) (decl : P.decl') ->
         match Node.elem decl with 
         | P.Alias ((tcon, _), _) -> 
           let* ts' = 
