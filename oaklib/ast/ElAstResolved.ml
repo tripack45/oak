@@ -61,6 +61,7 @@ end
  *     T 1 : T
  *)
 module Var   = VarMake (VarId) ()
+module TVar  = VarMake (TVarId) ()
 module DCon  = VarMake (DConId) ()
 module TyCon = VarMake (TyConId) ()
 
@@ -78,14 +79,9 @@ struct
     | Just of MConId.t
     | More of MConId.t * path
 
-  type tvar   = ElAst.Syntax.tvar
-  type rvar   = tvar
-
   type field'  = field node
   type lit'    = lit node
   type path'   = (path, pos option) Node.t
-  type tvar'   = tvar node
-  type rvar'   = rvar node
 
   (* Identifiers involves a few similar but different concepts.
    * 
@@ -108,18 +104,22 @@ struct
   type ('binder, 'id) ident_ref' = ('binder, 'id) ident_ref node
 
   type varid  = VarId.t
+  type tvarid = TVarId.t
   type dconid = DConId.t
   type tyconid = TyConId.t
 
   type varid'  = varid node
+  type tvarid' = tvarid node
   type dconid' = dconid node
   type tyconid' = tyconid node
 
   type var   = (Var.t, VarId.t) twin 
+  type tvar  = (TVar.t, TVarId.t) twin 
   type dcon  = (DCon.t, DConId.t) twin
   type tycon = (TyCon.t, TyConId.t) twin
 
   type var'   = var node 
+  type tvar'  = tvar node 
   type dcon'  = dcon node
   type tycon' = tycon node
 
@@ -130,6 +130,10 @@ struct
   type varref'   = varref node
   type dconref'  = dconref node
   type tyconref' = tyconref node
+
+  (* Row variables are just type variables of "row" kind 
+   * Similar to int variables are just variables of int type *)
+  type rvar' = tvar'
 
   (* TODO: implement tvar/rvar resolution *)
   and typ = 
@@ -345,7 +349,8 @@ struct
     binded_to_string DConId.to_string DCon.to_string_exn d
   let tycon_to_string (t : tycon') = 
     binded_to_string TyConId.to_string TyCon.to_string_exn t
-  let tvar_to_string (t : tvar') = ElAst.TVarId.to_string (Node.elem t)
+  let tvar_to_string (tv : tvar') = 
+    binded_to_string TVarId.to_string TVar.to_string_exn tv
 
   let ref_to_string twin_to_string id_to_string ident : string =
     match Node.elem ident with 
@@ -477,7 +482,7 @@ struct
 
   and typ_to_string (typ : typ') : string =
     match Node.elem typ with 
-    | TVar tvar -> Node.elem tvar |> ElAst.TVarId.to_string
+    | TVar tvar -> tvar_to_string tvar
     | Unit -> "()"
     | TyCon c -> tyconref_to_string c
     | Arrow (t1, t2) -> typ_to_string t1 ^ " -> " ^ typ_to_string t2
@@ -490,7 +495,7 @@ struct
        field_to_string field ^ ": " ^ typ_to_string typ
     in
     match row with 
-    | RVar rvar -> Node.fold_elem ElAst.TVarId.to_string rvar  
+    | RVar rvar -> tvar_to_string rvar  
     | Extension (r, fields) ->
       sprintf "%s & %s" (row_to_string r) (concat_map ", " field_to_string fields)
     | Fields fields -> concat_map ", " field_to_string fields

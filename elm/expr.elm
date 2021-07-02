@@ -36,3 +36,18 @@ d = let c : Int
 
 f : Int -> Int
 f x = x
+
+
+f0 : a -> Int
+f0 x = 
+  let g : b -> a
+      g t = x
+   in 0
+
+
+x1 : a -> Int
+x2 : a -> Int
+(x1, x2) = let t : a -> Int 
+               t = \x -> 1
+            in (t, t)
+ 

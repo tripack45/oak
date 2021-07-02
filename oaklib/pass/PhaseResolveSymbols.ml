@@ -70,6 +70,7 @@ type err =
   | DConIdRedefined       of R.dconid'  * R.dconid'
   | RepeatedAnnotation     of (P.var' * P.typ') * (P.var' * P.typ')
   | DanglingTypeAnnotation of (P.var' * P.typ')
+  | RepeatedTypeVar        of P.tvar' * P.tycon' 
 
 type 'a rslt = ('a, warn, err) Rst.t
 
@@ -117,26 +118,30 @@ end
 
 module Ctx =
 struct
-  type tctx = TyCon.t TyConId.Map.t
-  type dctx = DCon.t  DConId.Map.t
-  type vctx = Var.t   VarId.Map.t
+  type tctx  = TyCon.t TyConId.Map.t
+  type dctx  = DCon.t  DConId.Map.t
+  type vctx  = Var.t   VarId.Map.t
+  type tvctx = TVar.t  TVarId.Map.t
 
   type t = 
   {
-    tctx : tctx;
-    dctx : dctx;
-    vctx : vctx;
+    tctx  : tctx;
+    dctx  : dctx;
+    vctx  : vctx;
+    tvctx : tvctx;
   }
 
   let empty_tctx = TyConId.Map.empty
   let empty_dctx = DConId.Map.empty
   let empty_vctx = VarId.Map.empty
+  let empty_tvctx = TVarId.Map.empty
 
   let empty : t = 
   {
     tctx  = TyConId.Map.empty;
     dctx  = DConId.Map.empty;
     vctx  = VarId.Map.empty;
+    tvctx = TVarId.Map.empty;
   }
 
 end
@@ -393,6 +398,91 @@ let bind_pats ?prefix vctx pats =
     ) 
   in ok @@ (ctx', varids')
 
+let ftv_in_typ typ =
+  let rec r typ = 
+    match (Node.elem typ : P.typ) with 
+    | P.Unit 
+    | P.TyCon _         -> []
+    | P.TVar tv         -> [Node.elem tv]
+    | P.Arrow (t1, t2)  -> r t1 @ r t2
+    | P.TApp  (t1, t2)  -> r t1 @ r t2
+    | P.Tuple ts        -> List.concat_map ts ~f:r
+    | P.Record row      ->
+      let ftv_in_fields fields =
+          fields |> List.map ~f:snd |> List.concat_map ~f:r
+      in
+      let rec ftv_in_row = function
+        | P.RVar rv               -> [Node.elem rv]
+        | P.Extension (r, fields) -> ftv_in_row r @ ftv_in_fields fields
+        | P.Fields fields         -> ftv_in_fields fields
+      in 
+      ftv_in_row row
+  in
+  List.dedup_and_sort (r typ) ~compare:TVarId.compare
+
+(* Oak supports type binding towards a pattern instead of just a variable. This creates 
+ * ambiguities when we handle type annotations like the following:
+ *
+ * f0 : a -> Int
+ * f0 x = 
+ *   let f : a -> a
+ *       f t = x
+ *    in 0
+ * 
+ * Code above typechecks for Elm but not for Haskell. Haskell assigns `f` with generalized
+ * type "forall a. a -> a" instead of the concrete type variable "a" binded `f0`. Elm on the 
+ * other hand believes otherwise. This is a significant deviation in semantics compared to 
+ * Haskell (Haskell: all free type variables are considered forall bounded in type annotation).
+ * 
+ * The Elm approach creates issues when we consider multiple type annotations inside same binder 
+ * examples like this:
+ * 
+ * type T a = V (a -> Int) (a -> Int)
+ *
+ * f0 : a -> Int
+ * g0 : a -> Int
+ * 
+ * (f0, g0) = ...
+ *
+ * Specificially, does type variable `a` in both type annotations refers to the same type or 
+ * generalized independently. 
+ *
+ * The sensible thing to do here is to take the approach of OCaml, that we consider all type 
+ * variables of the same name appeared in the type annotations for the pattern as the same type 
+ * variables. This removes ambiguities when considering which "a" should be put under the scope:
+ * 
+ * f0 : a -> Int
+ * x  : a -> a
+ * (x, f0) = ( \x -> x, 
+ *             \x -> 
+ *                let f :: t -> a
+ *                    f _ = x
+ *                 in 0
+ *           )
+ *
+ * This piece of code can fail to type check if we assign different type variables to the annotation
+ * of x and f0, then added the binding for a in x into the scope instead of that of f0.
+ * 
+ * In the meantime, there doesn't seem a way to type annotate this thing in Haskell even with 
+ * language extention "ScopedTypeVariables"
+ *)
+let rec ftv_in_pat annots pat = 
+  let rec r pat =
+    match (Node.elem pat : P.pat) with 
+    | P.Any 
+    | P.Unit 
+    | P.EmptyList 
+    | P.Literal _     -> []
+    | P.List pats     -> List.concat_map pats ~f:r
+    | P.Tuple pats    -> List.concat_map pats ~f:r
+    | P.Con (_, pats) -> List.concat_map pats ~f:r
+    | P.Var v -> 
+      match Map.find annots (Node.elem v) with
+      | None -> []
+      | Some (_, typ) -> ftv_in_typ typ
+  in
+  List.dedup_and_sort (r pat) ~compare:TVarId.compare
+
 let rec translate_pat (amap : amap) (ctx : Ctx.t) dicts (pat : P.pat') =
   let (elem, pos) = Node.both pat in
   let ok' pat = ok @@ Node.node pat pos in
@@ -413,7 +503,7 @@ let rec translate_pat (amap : amap) (ctx : Ctx.t) dicts (pat : P.pat') =
         (* This should always succeed since we have checked all annotations are placed on
          * valid binders of this scope *)
         let* twin'  = lookup_binder ctx.vctx var
-        and* typ'  = translate_typ ctx.tctx dicts typ in
+        and* typ'  = translate_typ (ctx.tctx, ctx.tvctx) dicts typ in
         ok' @@ A.Pat.Var (twin, Some (twin', typ'))
     )
   | P.Con (qcon, pats) -> 
@@ -421,12 +511,12 @@ let rec translate_pat (amap : amap) (ctx : Ctx.t) dicts (pat : P.pat') =
     and* pats' = Rst.Par.map pats ~f:tr in
     ok' @@ A.Pat.Con (con', pats')
 
-and translate_typ tctx dicts (typ : P.typ') =
+and translate_typ (tctx, tvctx) dicts (typ : P.typ') =
   let (elem, pos) = Node.both typ in
   let ok' typ' = ok @@ Node.node typ' pos in
-  let tr = translate_typ tctx dicts in
+  let tr = translate_typ (tctx, tvctx) dicts in
   match elem with 
-  | P.TVar v         -> ok' @@ R.TVar v
+  | P.TVar v         -> let* tvar' = lookup_binder tvctx v in ok' @@ R.TVar tvar'
   | P.Unit           -> ok' A.Typ.Unit
   | P.TyCon qcon     -> let* qcon' = resolve_tycon dicts.tctx tctx qcon in ok' (A.Typ.TyCon qcon')
   | P.Arrow (t1, t2) -> let* t1' = tr t1 and* t2' = tr t2 in ok' @@ R.Arrow (t1', t2')
@@ -438,7 +528,9 @@ and translate_typ tctx dicts (typ : P.typ') =
     in
     let rec translate_row row = 
       match row with 
-      | P.RVar rvar' -> ok @@ R.RVar rvar'
+      | P.RVar rvar' -> 
+        let+ rvar' = lookup_binder tvctx rvar' in 
+        R.RVar rvar' 
       | P.Extension (row, fields) -> 
         let+ row' = translate_row row 
         and+ fields' = Rst.Par.map ~f:translate_field fields in
@@ -523,7 +615,7 @@ let rec translate_expr (ctx : Ctx.t) dicts (expr : P.expr') : R.expr' rslt =
  * value defintions into two separate bins without needing to worry about accidental
  * captures.
  *)
-and translate_decls (ctx : Ctx.t)  dicts decls =
+and translate_decls (ctx : Ctx.t) dicts decls =
 
   let tycon_prefix = TyConId.of_string "T" in
   let dcon_prefix  = DConId.of_string  "D" in
@@ -621,10 +713,12 @@ and translate_decls (ctx : Ctx.t)  dicts decls =
       in
       List.fold rs ~init:ctx ~f:set
     in
+    (* Type variables are not binded inside "in e" clause *)
     {
-      Ctx.tctx = set_list ctx.tctx ts;
-      Ctx.dctx = set_list ctx.dctx ds;
-      Ctx.vctx = set_list ctx.vctx vs;
+      ctx with
+        Ctx.tctx = set_list ctx.tctx ts;
+        Ctx.dctx = set_list ctx.dctx ds;
+        Ctx.vctx = set_list ctx.vctx vs;
     }
   in
 
@@ -644,41 +738,75 @@ and translate_decls (ctx : Ctx.t)  dicts decls =
       )
       ~fmap:(
         fun decl ->
+          let bind_tvars_of_tycon tycon tvars =
+            match List.find_a_dup ~compare:(Node.compare TVarId.compare) tvars with
+            | Some dup -> err @@ RepeatedTypeVar (dup, tycon)
+            | None ->
+              Rst.Seq.fold_map tvars ~init:(ok ctx'.tvctx) ~f:(
+                fun tvctx tvar -> 
+                  let binder = TVar.fresh ~id:(TVarId.of_string "tv") () in
+                  let tvctx' = Map.set tvctx ~key:(Node.elem tvar) ~data:binder in
+                  let* tvar' = lookup_binder tvctx' tvar in
+                  ok (tvctx', tvar')
+              )
+          in
+          (* Bind only free type variagles. If a type variable is already in the context, 
+           * then it considered bounded and should be skipped. *)
+          let bind_ftvs tvctx tvars = 
+            List.fold tvars ~init:tvctx ~f:(
+              fun tvctx tvar -> 
+                let binder = TVar.fresh ~id:(TVarId.of_string "tv") () in
+                match Map.add tvctx ~key:tvar ~data:binder with 
+                | `Ok tvctx' -> tvctx'
+                | `Duplicate -> tvctx
+            )
+          in
           match Node.elem decl with
           | P.Alias ((con, tvars), typ) ->
+            let* (tvctx', tvars') = bind_tvars_of_tycon con tvars in
             let* con' = lookup_binder ctx'.tctx con
-            and* typ' = translate_typ ctx'.tctx dicts typ in
-            ok @@ `TyCon (R.Alias ((con', tvars), typ'))
+            and* typ' = translate_typ (ctx'.tctx, tvctx') dicts typ in
+            ok @@ `TyCon (R.Alias ((con', tvars'), typ'))
           | P.TyCon ((con, tvars), ctors) ->
+            let* (tvctx', tvars') = bind_tvars_of_tycon con tvars in
             let* con' = lookup_binder ctx'.tctx con
             and* ctors' = Rst.Par.map ctors ~f:(
               fun (dcon, typs) -> 
                 let* dcon' = lookup_binder ctx'.dctx dcon
-                and* typs' = Rst.Par.map ~f:(translate_typ ctx'.tctx dicts) typs in
+                and* typs' = Rst.Par.map ~f:(translate_typ (ctx'.tctx, tvctx') dicts) typs in
                 ok @@ (dcon', typs')
             ) in
-            ok @@ `TyCon (R.TyCon ((con', tvars), ctors'))
+            ok @@ `TyCon (R.TyCon ((con', tvars'), ctors'))
           | P.Annot (_id, _typ) -> 
             (* Type annotations have been processe in their respective binder locations. *)
             ok `Annot
           | P.Fun ((var_node, pats), e) -> 
+            let annot_opt = Map.find annots (Node.elem var_node) in
             let* (vctx'', _) = bind_pats ctx'.vctx pats in
-            let ctx'' = {ctx' with vctx=vctx''} in
+            let ctx'' = 
+              match annot_opt with 
+              | None -> {ctx' with vctx=vctx''}
+              | Some (_, typ) ->
+                let tvctx'' = bind_ftvs ctx'.tvctx (ftv_in_typ typ) in
+                {ctx' with vctx=vctx''; tvctx=tvctx''}
+            in
             let* pats' = Rst.Par.map pats ~f:(translate_pat annots ctx'' dicts)
             and* f'    = lookup_binder vctx'' var_node 
             and* e'    = translate_expr ctx'' dicts e in (
-              match Map.find annots (Node.elem var_node) with
+              match annot_opt with
               | None -> 
                 ok @@ `Val (R.Fun ((f', None), pats', e'))
               | Some (f_annot, typ) -> 
                 let* f_annot' = lookup_binder vctx'' f_annot 
-                and* typ' = translate_typ ctx'.tctx dicts typ in
+                and* typ' = translate_typ (ctx''.tctx, ctx''.tvctx) dicts typ in
                 ok @@ `Val (R.Fun ((f', Some (f_annot', typ')), pats', e'))
             )
           | P.Pat (pat, e) -> 
+            let tvctx'' = bind_ftvs ctx'.tvctx (ftv_in_pat annots pat) in
+            let ctx'' = { ctx' with tvctx=tvctx''} in 
             (* The input has already binded pat *)
-            let* e'   = translate_expr ctx' dicts e
-            and* pat' = translate_pat  annots ctx' dicts pat in 
+            let* e'   = translate_expr ctx'' dicts e
+            and* pat' = translate_pat  annots ctx'' dicts pat in 
             ok @@ `Val (R.Pat (pat', e'))
       ) 
   in
@@ -715,8 +843,8 @@ let resolve_mod ~modpath mctx (t : P.m) : R.m rslt =
   let (P.Mod (mdecl, imports, decls)) = t in
   let imports = resolve_imports imports in
   let* dicts = imports_to_sigs mctx imports in
-  let* (_, (tycons', vals')) = translate_decls Ctx.empty dicts decls in
-  let m_sigmask = 
+    let* (_, (tycons', vals')) = translate_decls Ctx.empty dicts decls in
+    let m_sigmask = 
     match mdecl with 
     | None -> sigmask_any
     | Some (P.MDecl (_, exposing_opt)) -> exposing_to_sigmask ~default:sigmask_any exposing_opt
