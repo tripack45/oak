@@ -1,63 +1,119 @@
-open Oaklib
-open Oaklib.Driver
+let max_paren_depth = 6
+let code_len_args : Pass.WarnCodeLen.CodeLen.code_len_args = { 
+    m = (Pass.WarnCodeLen.Size(1000, 1000.), Pass.WarnCodeLen.Size(750, 750.)); 
+    func = (Pass.WarnCodeLen.Size(150, 150.), Pass.WarnCodeLen.Size(100, 100.)); 
+    lambda = (Pass.WarnCodeLen.Size(80, 80.), Pass.WarnCodeLen.Size(60, 60.)) 
+  }
 
-(* main_driver with chn *)
+module Src = Oaklib.Src
+module ElAst = Oaklib.ElAst
+module Lex = Oaklib.Lex
+module Parse = Oaklib.Parse
+module OakPass = Oaklib.Pass
+module ElfPass = Pass
+module ElAstResolved = Oaklib.ElAstResolved
 
-let main_chn name chn = 
-  print_endline @@ Printf.sprintf "----- [Info] Parsing: %s -----" name;
-  let src = Src.Source.of_in_channel name chn in
-  let () = print_endline "----- [Info] Layout Insensitive -----" in
-  let () = Lex.layout_insensitive_src src in
-  (* let () = print_endline "----- [Info] EL AST -----" in
-  let m = Parse.parse_src src in
-  let () = Parse.dump_with_layout @@ ElAst.ToString.m_to_string m in *)
-  (* let () = print_endline "----- [Warning] ParenthesesDepth -----" in
-  let () = Pass.WarnParentheseDepth.dump_result src @@ Pass.WarnParentheseDepth.run ~max_depth:1 m  in
-  let () = print_endline "----- [Warning] CodeLength -----" in
-  let () = Pass.WarnCodeLen.dump_result src @@ Pass.WarnCodeLen.run m  in
-  let () = print_endline "----- [Phase] ResolveSymbols -----" in
-  let m = Pass.PhaseResolveSymbols.resolve_mod ~modpath:None ElAst.Path.Map.empty m in
-  let () = Parse.dump_with_layout @@ ElAstResolved.ToString.m_to_string m in *)
-  ()
+module ElmModule: sig 
+  type meta
+  type t
+  val create_meta: string -> string -> meta
+  val of_chn: string -> in_channel -> t
+  val of_meta: meta -> t
+  val analysis_m: t -> t
+  val resolve_module_dependency: t list -> (ElAst.Path.t * ElAst.Syntax.m) list
+  val resolve_ast: (ElAst.Path.t * ElAst.Syntax.m) list -> ElAstResolved.Syntax.m list
+end = struct
+  type meta = {
+    (* identifier *)
+    name: ElAst.Path.t;
+    (* canonical path *)
+    src_path: string option;
+  }
 
+  let to_path str = ElAst.Path.Just (ElAst.MConId.of_string str)
 
+  let create_meta name_str path_str = 
+    let name = to_path name_str in
+    let src_path = Some path_str in 
+    { name; src_path }
 
-let rec print_string_list list =
-  match list with
-  | x :: xs -> 
-    let () = print_endline x in 
-    let () = print_string_list xs in 
-    ()
-  | [] -> ()
+  type t = {
+    meta: meta;
+    src: Src.Source.t;
+    m: ElAst.Syntax.m;
+  }
 
-(* let read_file file = 
-  let chn = open_in file in
-  try
-    while true do
-      let line = input_line chn in
-      print_endline line;
-    done
-  with End_of_file ->
-    close_in chn *)
+  let of_chn name chn = 
+    let meta = {name = to_path name; src_path = None} in
+    let () = print_endline @@ Printf.sprintf "----- [Info] Parsing: %s -----" name in
+    let src = Src.Source.of_in_channel name chn in
+    let () = print_endline "----- [Info] Layout Insensitive -----" in
+    let () = print_endline ":: Warning :: current Layout Insensistive Info is legacy and doesn't ensure correctness." in
+    let () = Lex.layout_insensitive_src src in
+    let () = print_endline "----- [Info] EL AST -----" in
+    let m = Parse.parse_src' src in
+    let () = Parse.dump_with_layout @@ ElAst.ToString.m_to_string m in
+    { meta; src; m }
 
+  let of_meta { name; src_path } = 
+    let src_path = Option.get src_path in
+    let chn = open_in src_path in
+    let t = of_chn (ElAst.Path.to_string name) chn in
+    let () = close_in chn in
+    t
+
+  let analysis_m modl =
+    let { src; m; _ } = modl in
+    let () = print_endline "----- [Warning] ParenthesesDepth -----" in
+    let () = ElfPass.WarnParentheseDepth.dump_result src 
+             @@ ElfPass.WarnParentheseDepth.run ~max_depth:max_paren_depth m in
+    let () = print_endline "----- [Warning] CodeLength -----" in
+    let () = ElfPass.WarnCodeLen.dump_result src 
+             @@ ElfPass.WarnCodeLen.run ~args:code_len_args m in
+    modl
+
+  let resolve_module_dependency (modules: t list) =
+    let () = print_endline "----- [Phase] ResolveModuleDependency -----" in
+    let mods = modules |> Core.List.map ~f:(fun {meta; m; _} -> (meta.name, m)) in
+    let open OakPass.PhaseResolveModuleDependency in
+    let mods = match run mods with
+    | R.Ok v -> v |> Core.List.map ~f:(fun (path, (_, m)) -> (path, m))
+    | R.Error _errors -> 
+      (* dump_error design seems to be a problem; no src selected here *)
+      (* dump_errors src errors; *) 
+      assert false
+    in
+    let () = Core.List.iter mods 
+      ~f:(fun (_, m) -> Parse.dump_with_layout @@ ElAst.ToString.m_to_string m)
+    in mods
+    
+  let resolve_ast mods =
+    let () = print_endline "----- [Phase] ResolveSymbols -----" in
+    let open OakPass.PhaseResolveSymbols in
+    let mods = match run mods with
+    | Rst.Ok (v, _w) -> v
+    | Rst.Error (_e, _ws) -> assert false
+    in mods
+end
 
 let () =
-  (* path info *)
   let argc = Array.length Sys.argv in
   if argc == 1 then 
-    main_chn "stdin" stdin
+    ElmModule.of_chn "Stdin" stdin 
+    |> ElmModule.analysis_m
+    |> (fun x -> [x]) 
+    |> ElmModule.resolve_module_dependency 
+    |> ElmModule.resolve_ast 
+    |> ignore
   else
   let path = Array.get Sys.argv 1 in
   print_endline @@ "searching: " ^ path;
-  let path_map = SrcFull path
-    |> Driver.traverse_elm_proj_root 
-  in
-  let _ = path_map
-    |> List.map (fun (SrcName n, SrcFull x) -> n ^ " --> " ^ x) 
-    |> print_string_list 
-  in
-  path_map
-    |> List.map (fun (SrcName n, SrcFull x) -> (n, x))
-    (* |> List.map (fun (n, x) -> read_file x;  (n, x)) *)
-    |> List.map (fun (n, x) -> let chn = open_in x in main_chn n chn; close_in chn )
+  let open Oaklib.Driver in
+  SrcFull path
+    |> traverse_elm_proj_root 
+    |> List.map (fun (SrcName n, SrcFull x) -> ElmModule.create_meta n x)
+    |> List.map ElmModule.of_meta
+    |> List.map ElmModule.analysis_m
+    |> ElmModule.resolve_module_dependency
+    |> ElmModule.resolve_ast
     |> ignore
