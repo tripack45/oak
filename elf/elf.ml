@@ -5,6 +5,7 @@ let code_len_args : Pass.WarnCodeLen.CodeLen.code_len_args = {
     lambda = (Pass.WarnCodeLen.Size(80, 80.), Pass.WarnCodeLen.Size(60, 60.)) 
   }
 
+module Driver = Oaklib.Driver
 module Src = Oaklib.Src
 module ElAst = Oaklib.ElAst
 module Lex = Oaklib.Lex
@@ -45,12 +46,12 @@ end = struct
 
   let of_chn name chn = 
     let meta = {name = to_path name; src_path = None} in
-    let () = print_endline @@ Printf.sprintf "----- [Info] Parsing: %s -----" name in
+    let () = Driver.print_title "Info" @@ Printf.sprintf "Parsing: %s" name in
     let src = Src.Source.of_in_channel name chn in
-    let () = print_endline "----- [Info] Layout Insensitive -----" in
+    (* let () = Driver.print_title "Info" "Layout Insensitive" in
     let () = print_endline ":: Warning :: current Layout Insensistive Info is legacy and doesn't ensure correctness." in
-    let () = Lex.layout_insensitive_src src in
-    let () = print_endline "----- [Info] EL AST -----" in
+    let () = Lex.layout_insensitive_src src in *)
+    let () = Driver.print_title "Info" "EL AST" in
     let m = Parse.parse_src' src in
     let () = Parse.dump_with_layout @@ ElAst.ToString.m_to_string m in
     { meta; src; m }
@@ -64,16 +65,16 @@ end = struct
 
   let analysis_m modl =
     let { src; m; _ } = modl in
-    let () = print_endline "----- [Warning] ParenthesesDepth -----" in
+    let () = Driver.print_title "Analysis" "ParenthesesDepth" in
     let () = ElfPass.WarnParentheseDepth.dump_result src 
              @@ ElfPass.WarnParentheseDepth.run ~max_depth:max_paren_depth m in
-    let () = print_endline "----- [Warning] CodeLength -----" in
+    let () = Driver.print_title "Analysis" "CodeLength" in
     let () = ElfPass.WarnCodeLen.dump_result src 
              @@ ElfPass.WarnCodeLen.run ~args:code_len_args m in
     modl
 
   let resolve_module_dependency (modules: t list) =
-    let () = print_endline "----- [Phase] ResolveModuleDependency -----" in
+    let () = Driver.print_title "Phase" "ResolveModuleDependency" in
     let mods = modules |> Core.List.map ~f:(fun {meta; m; _} -> (meta.name, m)) in
     let open OakPass.PhaseResolveModuleDependency in
     let mods = match run mods with
@@ -88,7 +89,7 @@ end = struct
     in mods
     
   let resolve_ast mods =
-    let () = print_endline "----- [Phase] ResolveSymbols -----" in
+    let () = Driver.print_title "Phase" "ResolveSymbols" in
     let open OakPass.PhaseResolveSymbols in
     let mods = match run mods with
     | Rst.Ok (v, _w) -> v
@@ -107,7 +108,7 @@ let () =
     |> ignore
   else
   let path = Array.get Sys.argv 1 in
-  print_endline @@ "searching: " ^ path;
+  Driver.print_title "Info" @@ Printf.sprintf "Searching: \"%s\"" path;
   let open Oaklib.Driver in
   SrcFull path
     |> traverse_elm_proj_root 
