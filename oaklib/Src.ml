@@ -4,6 +4,8 @@
  * keep track of source info and produce source strings based on line info.
  *)
 
+module L = Lex.LayoutSensitiveLexer
+
 module Source :
 sig 
   type t
@@ -14,7 +16,8 @@ sig
   val to_stream  : t -> char Stream.t
   val raw        : t -> string
   val name       : t -> string 
-  val lines      : t -> Lexing.position * Lexing.position -> string
+  val lines      : t -> L.pos -> string
+  val add_comment: t -> L.cmtp -> unit
 end =
 struct
   
@@ -27,9 +30,10 @@ struct
    * a character array then extract the index of each newline character. *)
   type t = 
   {
-    name  : src_name;
-    lines : string Array.t;
-    raw   : string;
+    name    : src_name;
+    lines   : string Array.t;
+    raw     : string;
+    mutable comment : (L.cmt * L.pos) list;
   }
 
   let _of_chn src_name chn =
@@ -37,7 +41,7 @@ struct
     let raw = Core.String.concat ~sep:"\n" strings in
     let lines = Core.Array.of_list strings in
     (* Break the raw string by resending them into a channel *)
-    { name = src_name ; raw; lines }
+    { name = src_name ; raw; lines; comment = [] }
 
   let of_stdin () = 
     _of_chn Stdin stdin
@@ -64,4 +68,7 @@ struct
     Core.Array.slice lines l l'
     |> Core.Array.mapi ~f:(fun i str -> Printf.sprintf "%3d| %s" (i + l + 1) str)
     |> Core.String.concat_array ~sep:"\n"
+
+  let add_comment src (cmt, pos) = 
+    src.comment <- (cmt, pos) :: src.comment
 end

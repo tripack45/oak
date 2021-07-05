@@ -100,7 +100,7 @@ let parse_src' src =
   let open Lex.LayoutSensitiveLexer in
   let lexbuf = Lexing.from_string ~with_positions:true (Src.Source.raw src) in
   let () = Lexing.set_filename lexbuf (Src.Source.name src) in
-  let init_raw    = Raw.t_of_lexbuf lexbuf in
+  let init_raw    = Raw.t_of_lexbuf (Src.Source.add_comment src) lexbuf in
   let init_menhir = ElmParse.Incremental.main lexbuf.lex_curr_p in
   let init_algl   = AlgL.initial (Annotated.annotate init_raw) in
   let as_offer (tp, (s, e)) = (tp, s, e) in

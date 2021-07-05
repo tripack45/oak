@@ -179,6 +179,9 @@ open Util
 %token EOF 
 %token <int>REQ_INDENT 
 %token <int>WTH_INDENT
+(*  make menhir happy *)
+%token <(pos, string) Core.Tuple2.t>LCOMMENT
+%token <(pos, string) Core.Tuple2.t>BCOMMENT
 
 %start <ElAst.Alias.Module.m> main
 

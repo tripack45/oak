@@ -44,6 +44,10 @@ sig
   type tok = T.t
   type pos = Lexing.position * Lexing.position
   type tp  = tok * pos
+  type cmt = 
+    | LineCmt  of string
+    | BlockCmt of string
+  type cmtp = cmt * pos
 
   val explode_qualified_name : string -> Lexing.position -> tp list
 
@@ -61,7 +65,7 @@ sig
   module Raw :
   sig
     type t 
-    val t_of_lexbuf  : Lexing.lexbuf -> t
+    val t_of_lexbuf  : (cmtp -> unit) -> Lexing.lexbuf -> t
     (* This should only be used to dump stuff. Ideally we would replace them with 
     * corresponding dump functions. Same goes for Annotated.tp_seq_of_t. *)
     val tp_seq_of_t  : t -> tp Seq.t
@@ -71,7 +75,7 @@ sig
   sig
     type t
     val annotate     : Raw.t -> t
-    val t_of_lex_buf : Lexing.lexbuf -> t
+    val t_of_lex_buf : (cmtp -> unit) -> Lexing.lexbuf -> t
     val tp_seq_of_t  : t -> tp Seq.t
   end
 
@@ -102,6 +106,12 @@ struct
   type token_pos = T.t * pos 
 
   type tp = token_pos
+
+  type cmt = 
+    | LineCmt  of string
+    | BlockCmt of string
+
+  type cmtp = cmt * pos
 
   let (@::) = Seq.cons
 
@@ -281,18 +291,23 @@ struct
 
     (* EOF needs to be prodeced as an actual token because we need its 
      * position for the subsequent code to inser the closing scopes. *)
-    let t_of_lexbuf lexbuf : t = 
+    let t_of_lexbuf on_comment lexbuf : t = 
       MakePersistent.seq_from (
         let eof_produced = ref false in
-        fun () -> 
+        let rec loop () = 
           if not !eof_produced then
             let tok = L.initial lexbuf in
             let p_start = Lexing.lexeme_start_p lexbuf in
             let p_end   = Lexing.lexeme_end_p lexbuf in
-            eof_produced := (tok = T.EOF);
-            Some (tok, (p_start, p_end))
+            match tok with
+            | T.LCOMMENT (pos, s) -> on_comment (LineCmt  s, pos); loop ()
+            | T.BCOMMENT (pos, s) -> on_comment (BlockCmt s, pos); loop ()
+            | _ -> 
+              eof_produced := (tok = T.EOF);
+              Some (tok, (p_start, p_end))
           else 
             None
+        in loop
       )
 
     let tp_seq_of_t = Fun.id
@@ -362,8 +377,8 @@ struct
           let col = snd (token_lc tp) in
           at_start_of tp (T.REQ_INDENT col) @:: kick raw
 
-      let t_of_lex_buf lexbuf =
-        annotate (Raw.t_of_lexbuf lexbuf)
+      let t_of_lex_buf on_comment lexbuf =
+        annotate (Raw.t_of_lexbuf on_comment lexbuf)
       let tp_seq_of_t = Fun.id
   end
 
@@ -407,7 +422,7 @@ end
 
 (* layout_insensitive *)
 
-module L = LayoutSensitiveLexer
+(* module L = LayoutSensitiveLexer
 module T = L.T
 let layout_insensitive_src src=
   let lexbuf = Lexing.from_string ~with_positions:true (Src.Source.raw src) in
@@ -425,4 +440,4 @@ let layout_insensitive_src src=
          looper ()
     with 
     T.Eof -> ();
-    print_endline ""
+    print_endline "" *)

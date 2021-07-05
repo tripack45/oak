@@ -67,8 +67,8 @@ type t =
     | FLOATCONST of string
     | STRCONST   of string
     (* Comments *)
-    (* | LINE_COMMENT  of string
-    | BLOCK_COMMENT of string *)
+    | LCOMMENT   of (Lexing.position * Lexing.position, string) Core.Tuple2.t
+    | BCOMMENT   of (Lexing.position * Lexing.position, string) Core.Tuple2.t
     (* Identifiers *)
     | VARID     of string
     | CONID     of string
@@ -139,8 +139,8 @@ let to_string tok=
 | INTCONST   s -> s ^ "_d"
 | FLOATCONST s -> s ^ "_f"
 | STRCONST   s -> "\"" ^ s  ^ "\""
-(* | LINE_COMMENT  s -> "--" ^ s
-| BLOCK_COMMENT s -> "{-" ^ s ^ "-}" *)
+| LCOMMENT (_, s) -> "--" ^ s ^ "\n"
+| BCOMMENT (_, s) -> "{-" ^ s ^ "-}"
 | VARID      s -> "Var:" ^ s 
 | CONID      s -> "Con:" ^ s
 | QVARID     s -> "QVar:" ^ s 
@@ -207,6 +207,8 @@ let to_parse_string tok =
 | INTCONST   _ -> "INTCONST"
 | FLOATCONST _ -> "FLOATCONST"
 | STRCONST   _ -> "STRCONST"
+| LCOMMENT    _ -> "LCOMMENT"
+| BCOMMENT    _ -> "BCOMMENT"
 | VARID      _ -> "VARID"
 | CONID      _ -> "CONID"
 | QVARID     _ -> "QVARID"
