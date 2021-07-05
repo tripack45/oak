@@ -62,9 +62,12 @@ module type IDENT = sig
   val of_string : string -> t
   val to_string : t -> string
 
-  include Core.Comparator.S with type t := t
+  include Core.Comparable.S with type t := t
 
   module Map : Core.Map.S with type Key.t = t
+                           and type Key.comparator_witness = comparator_witness
+  module Set : Core.Set.S with type Elt.t = t
+                           and type Elt.comparator_witness = comparator_witness
 end
 
 module Ident () =
@@ -88,30 +91,26 @@ sig
 
   val to_string : t -> string
 
-  include Core.Comparable.S_plain with type t := t
+  include Core.Comparable.S with type t := t
 
   module Map : Core.Map.S with type Key.t = t
+                           and type Key.comparator_witness = comparator_witness
+  module Set : Core.Set.S with type Elt.t = t
+                           and type Elt.comparator_witness = comparator_witness
 end = struct
   module T = 
   struct 
-    module T_ = 
-    struct 
-      type t =
-        | Just of MConId.t
-        | More of MConId.t * t
-      [@@deriving compare, sexp]
+    type t =
+      | Just of MConId.t
+      | More of MConId.t * t
+    [@@deriving compare, sexp]
 
-      let rec to_string = function 
-        | Just id -> MConId.to_string id
-        | More (id, path) -> MConId.to_string id ^ "." ^ to_string path
-    end
-    include T_
-    include Core.Comparable.Make_plain(T_)
+    let rec to_string = function 
+      | Just id -> MConId.to_string id
+      | More (id, path) -> MConId.to_string id ^ "." ^ to_string path
   end
-  
   include T
-  module Comparable = T
-  module Map = Core.Map.Make(T)
+  include Core.Comparable.Make(T)
 end
 
 (* Definitions of external language syntax elements *)

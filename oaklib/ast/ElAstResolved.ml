@@ -32,6 +32,7 @@ module VarMake (M : ElAst.IDENT) () : BINDER with type id = M.t
   type id = M.t
 
   module Map = Int.Map
+  module Set = Int.Set
 
   let map : (id Map.t) ref = ref Map.empty
   let count = ref 0

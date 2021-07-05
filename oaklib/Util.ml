@@ -21,6 +21,19 @@ struct
 
 end
 
+module Map =
+struct
+  let add_or_dup (type k) (type v) (map : (k, v, 'wit) Core.Map.t) ~key ~data = 
+    let exception Dup of v in
+    let update = function
+        | None     -> data
+        | Some dup -> raise (Dup dup)
+    in
+    try 
+      `Ok (Core.Map.update map key ~f:update)
+    with Dup dup -> `Duplicate dup
+end
+
 module Monoid =
 struct
   module Sig = 
@@ -47,6 +60,15 @@ struct
   end
 end
 
+module Never :
+sig
+  type t
+  val unreachable : t -> 'a
+end =
+struct
+  type t = | 
+  let unreachable (t : t) = match t with _ -> .
+end
 
 module PassResult =
 struct
@@ -84,6 +106,7 @@ struct
       val fold_left   : 't list -> init:('r, 'w, 'e) t -> f:('r -> 't -> ('r, 'w, 'e) t) -> ('r, 'w, 'e) t
       val fold_right  : 't list -> init:('r, 'w, 'e) t -> f:('t -> 'r -> ('r, 'w, 'e) t) -> ('r, 'w, 'e) t
       val fold        : 't list -> init:('r, 'w, 'e) t -> f:('r -> 't -> ('r, 'w, 'e) t) -> ('r, 'w, 'e) t
+      val foldi       : 't list -> init:('r, 'w, 'e) t -> f:(int -> 'r -> 't -> ('r, 'w, 'e) t) -> ('r, 'w, 'e) t
       val fold_map    : 't list -> init:('r, 'w, 'e) t -> f:('r -> 't -> ('r * 't2, 'w, 'e) t) -> ('r * 't2 list, 'w, 'e) t
       val folding_map : 't list -> init:('r, 'w, 'e) t -> f:('r -> 't -> ('r * 't2, 'w, 'e) t) -> ('t2 list, 'w, 'e) t
       val filter_map  : 't list -> f:('t -> ('r option, 'w, 'e) t) -> ('r list, 'w, 'e) t
@@ -96,6 +119,7 @@ struct
         val lift        : ('r list -> 'rr) -> ('r list, 'w, 'e) t -> ('rr, 'w, 'e) t
         val map         : ('r list, 'w, 'e) t -> f:('r  -> 'rr) -> ('rr list, 'w, 'e) t
         val fold        : ('r list, 'w, 'e) t -> init:'rr -> f:('rr -> 'r -> 'rr) -> ('rr, 'w, 'e) t
+        val foldi       : ('r list, 'w, 'e) t -> init:'rr -> f:(int -> 'rr -> 'r -> 'rr) -> ('rr, 'w, 'e) t
         val fold_left   : ('r list, 'w, 'e) t -> init:'rr -> f:('rr -> 'r -> 'rr) -> ('rr, 'w, 'e) t
         val fold_right  : ('r list, 'w, 'e) t -> init:'rr -> f:('r  -> 'rr -> 'rr) -> ('rr, 'w, 'e) t
         val fold_map    : ('r list, 'w, 'e) t -> init:'r2 -> f:('r2 -> 'r -> 'r2 * 'r3) -> ('r2 * 'r3 list, 'w, 'e) t
@@ -337,6 +361,11 @@ struct
           )
         let fold = fold_left
 
+        let foldi xs ~init ~f = 
+          List.foldi xs ~init ~f:(
+            fun i accum x -> bind accum ~f:(fun accum' -> f i accum' x)
+          )
+
         let map xs ~f =
           fold_left xs ~init:(return []) ~f:(
             fun xs' x -> bind (f x) ~f:(fun x' -> return (x'::xs'))
@@ -381,6 +410,7 @@ struct
         let fold_left rs ~init ~f = lift (List.fold_left ~init ~f) rs
         let fold_right rs ~init ~f = lift (List.fold_right ~init ~f) rs
         let fold rs ~init ~f = lift (List.fold ~init ~f) rs
+        let foldi rs ~init ~f = lift (List.foldi ~init ~f) rs
         let fold_map rs ~init ~f = lift (List.fold_map ~init ~f) rs
         let folding_map rs ~init ~f = lift (List.folding_map ~init ~f) rs
         let filter rs ~f = lift (List.filter ~f) rs
