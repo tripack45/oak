@@ -4,7 +4,7 @@
  * keep track of source info and produce source strings based on line info.
  *)
 
-module L = Lex.LayoutSensitiveLexer
+module L = Lex
 
 module Source :
 sig 

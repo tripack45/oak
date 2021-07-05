@@ -1,85 +1,85 @@
 type t = 
-    (* Keywords *)
-    | MODULE | EXPOSING | IMPORT | AS | PORT
-    | CASE   | OF
-    | LET    | IN
-    | IF     | THEN | ELSE 
-    | TYPE
-    | ALIAS
-    (* Lexical Delimiters *)
-    | EQ
-    | ARROW
-    | COMMA
-    | LAMBDA           (* \  *)
-    | SEMI             (* ;  *)
-    | BAR              (* |  *)
-    | OF_TYPE          (* :  *)
-    (* Semantic Operators *)
-    | DOT              (* .  *)
-    | DOTDOT           (* .. *)
-    | LPAREN | RPAREN  (* () *)
-    | LKET   | RKET    (* [] *)
-    | LBRACE | RBRACE  (* {} *)
-    | UNDERSCORE       (* _  *)
+  (* Keywords *)
+  | MODULE | EXPOSING | IMPORT | AS | PORT
+  | CASE   | OF
+  | LET    | IN
+  | IF     | THEN | ELSE 
+  | TYPE
+  | ALIAS
+  (* Lexical Delimiters *)
+  | EQ
+  | ARROW
+  | COMMA
+  | LAMBDA           (* \  *)
+  | SEMI             (* ;  *)
+  | BAR              (* |  *)
+  | OF_TYPE          (* :  *)
+  (* Semantic Operators *)
+  | DOT              (* .  *)
+  | DOTDOT           (* .. *)
+  | LPAREN | RPAREN  (* () *)
+  | LKET   | RKET    (* [] *)
+  | LBRACE | RBRACE  (* {} *)
+  | UNDERSCORE       (* _  *)
 
-  (* infix right 0 (<|)   = apL
-   * infix left  0 (|>)   = apR
-   * infix right 2 (||)   = or
-   * infix right 3 (&&)   = and
-   * infix non   4 (==)   = eq
-   * infix non   4 (/=)   = neq
-   * infix non   4 (<)    = lt
-   * infix non   4 (>)    = gt
-   * infix non   4 (<=)   = le
-   * infix non   4 (>=)   = ge
-   * infix right 5 (::)   = cons
-   * infix right 5 (++)   = append
-   * infix left  6 (+)    = add
-   * infix left  6 (-)    = sub
-   * infix left  7 (\*\)  = mul
-   * infix left  7 (/)    = fdiv
-   * infix left  7 (//)   = idiv
-   * infix right 8 (^)    = pow
-   * infix left  9 (<<)   = composeL
-   * infix right 9 (>>)   = composeR
-   *)
+(* infix right 0 (<|)   = apL
+  * infix left  0 (|>)   = apR
+  * infix right 2 (||)   = or
+  * infix right 3 (&&)   = and
+  * infix non   4 (==)   = eq
+  * infix non   4 (/=)   = neq
+  * infix non   4 (<)    = lt
+  * infix non   4 (>)    = gt
+  * infix non   4 (<=)   = le
+  * infix non   4 (>=)   = ge
+  * infix right 5 (::)   = cons
+  * infix right 5 (++)   = append
+  * infix left  6 (+)    = add
+  * infix left  6 (-)    = sub
+  * infix left  7 (\*\)  = mul
+  * infix left  7 (/)    = fdiv
+  * infix left  7 (//)   = idiv
+  * infix right 8 (^)    = pow
+  * infix left  9 (<<)   = composeL
+  * infix right 9 (>>)   = composeR
+  *)
 
-    | APL                 (* <| *)
-    | APR                 (* |> *)
-    | OR                  (* || *)
-    | AND                 (* && *)
-    | EQU                 (* == *)
-    | NE                  (* /= *)
-    | GT    | LT          (* >  *)
-    | GEQ   | LEQ         (* >= *)
-    | CONS                (* :: *)
-    | APPEND              (* ++ *)
-    (* Arithematics *)
-    | PLUS  | MINUS
-    | TIMES 
-    | FDIV                (* /  *)
-    | IDIV                (* // *)
-    | POW                 (* ^  *)
-    | COMPOSEL            (* << *)
-    | COMPOSER            (* >> *)
-    (* Literals *)
-    | INTCONST   of string
-    | FLOATCONST of string
-    | STRCONST   of string
-    (* Comments *)
-    | LCOMMENT   of (Lexing.position * Lexing.position, string) Core.Tuple2.t
-    | BCOMMENT   of (Lexing.position * Lexing.position, string) Core.Tuple2.t
-    (* Identifiers *)
-    | VARID     of string
-    | CONID     of string
-    | QVARID    of string
-    | QCONID    of string
-    (* Layout Sensitive Transformation *)
-    | EOF                (* eof *)
-    | LDELIM             (* {{  *)
-    | RDELIM             (* }}  *)
-    | REQ_INDENT of int  (* {n} *)
-    | WTH_INDENT of int  (* <n> *)
+  | APL                 (* <| *)
+  | APR                 (* |> *)
+  | OR                  (* || *)
+  | AND                 (* && *)
+  | EQU                 (* == *)
+  | NE                  (* /= *)
+  | GT    | LT          (* >  *)
+  | GEQ   | LEQ         (* >= *)
+  | CONS                (* :: *)
+  | APPEND              (* ++ *)
+  (* Arithematics *)
+  | PLUS  | MINUS
+  | TIMES 
+  | FDIV                (* /  *)
+  | IDIV                (* // *)
+  | POW                 (* ^  *)
+  | COMPOSEL            (* << *)
+  | COMPOSER            (* >> *)
+  (* Literals *)
+  | INTCONST   of string
+  | FLOATCONST of string
+  | STRCONST   of string
+  (* Comments *)
+  | LCOMMENT   of (Lexing.position * Lexing.position, string) Core.Tuple2.t
+  | BCOMMENT   of (Lexing.position * Lexing.position, string) Core.Tuple2.t
+  (* Identifiers *)
+  | VARID     of string
+  | CONID     of string
+  | QVARID    of string
+  | QCONID    of string
+  (* Layout Sensitive Transformation *)
+  | EOF                (* eof *)
+  | LDELIM             (* {{  *)
+  | RDELIM             (* }}  *)
+  | REQ_INDENT of int  (* {n} *)
+  | WTH_INDENT of int  (* <n> *)
 
 (* Defined for menhir*)
 type token = t

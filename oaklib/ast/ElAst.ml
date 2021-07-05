@@ -256,7 +256,7 @@ struct
     | Tuple      of expr' list  (* >= 2 elements *)
     | List       of expr' list  (* >= 0 elements *)
     | Record     of (field' * expr') list
-    (* Data construction *)
+    (* Data construction; Todo: DCon *)
     | Con        of qdcon' * (expr' list)
     (* Identifier refernce *)
     | Var        of qvar'

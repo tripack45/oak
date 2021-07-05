@@ -57,7 +57,7 @@ struct
         (con::cons, s::e::poss, base)
       | [] -> assert false
     in
-    flatten (Lex.LayoutSensitiveLexer.explode_qualified_name s start)
+    flatten (Lex.explode_qualified_name s start)
 
   let rec module_path cons = 
       match cons with 
@@ -67,7 +67,7 @@ struct
 
   let parse_modid (s : string) (pos : pos) : path' =
     let path =
-      (Lex.LayoutSensitiveLexer.explode_qualified_name s (fst pos))
+      (Lex.explode_qualified_name s (fst pos))
       |> Core.List.map ~f:fst
       |> module_path
     in node path pos
@@ -152,10 +152,6 @@ open Util
 %token <string>INTCONST 
 %token <string>FLOATCONST
 %token <string>STRCONST
-
-(* Comments *)
-// %token <string>LINE_COMMENT
-// %token <string>BLOCK_COMMENT
 
 %token <string>VARID
 %token <string>CONID
@@ -365,22 +361,22 @@ aexp :
 %inline qop:
 | APL                                                                               { Expr.APL      }
 | APR                                                                               { Expr.APR      }
-| OR                                                                                { Expr.OR      }
-| AND                                                                               { Expr.AND     }
-| EQU                                                                               { Expr.EQU     }
-| NE                                                                                { Expr.NE      }
-| GT                                                                                { Expr.GT      }
-| LT                                                                                { Expr.LT      }
-| GEQ                                                                               { Expr.GEQ     }
-| LEQ                                                                               { Expr.LEQ     }
+| OR                                                                                { Expr.OR       }
+| AND                                                                               { Expr.AND      }
+| EQU                                                                               { Expr.EQU      }
+| NE                                                                                { Expr.NE       }
+| GT                                                                                { Expr.GT       }
+| LT                                                                                { Expr.LT       }
+| GEQ                                                                               { Expr.GEQ      }
+| LEQ                                                                               { Expr.LEQ      }
 | CONS                                                                              { Expr.CONS     }
 | APPEND                                                                            { Expr.APPEND   }
-| PLUS                                                                              { Expr.PLUS    }
-| MINUS                                                                             { Expr.MINUS   }
-| TIMES                                                                             { Expr.TIMES   }
-| FDIV                                                                              { Expr.FDIV    }
-| IDIV                                                                              { Expr.IDIV    }
-| POW                                                                               { Expr.POW     }
+| PLUS                                                                              { Expr.PLUS     }
+| MINUS                                                                             { Expr.MINUS    }
+| TIMES                                                                             { Expr.TIMES    }
+| FDIV                                                                              { Expr.FDIV     }
+| IDIV                                                                              { Expr.IDIV     }
+| POW                                                                               { Expr.POW      }
 | COMPOSEL                                                                          { Expr.COMPOSEL }
 | COMPOSER                                                                          { Expr.COMPOSER }
 
@@ -441,19 +437,19 @@ id:
 | tycon LPAREN DOTDOT RPAREN                                                        { id_tycon $1                       }
 
 tvar:
-| VARID                                                                             { tvar $1 $loc }
+| VARID                                                                             { tvar $1  $loc }
 
 fieldid:
 | VARID                                                                             { field $1 $loc }
 
 var:
-| VARID                                                                             { var $1 $loc }
+| VARID                                                                             { var $1   $loc }
 
 tycon:
 | CONID                                                                             { tycon $1 $loc }
 
 dcon:
-| CONID                                                                             { dcon $1 $loc }
+| CONID                                                                             { dcon $1  $loc }
 
 qvar:
 | qvarid                                                                            { $1 }
@@ -471,17 +467,17 @@ literal:
 | STRCONST                                                                          { node (Literal.String $1) $loc }
 
 modid:
-| QCONID                                                                            { parse_modid $1 $loc }
-| CONID                                                                             { parse_modid $1 $loc }
+| QCONID                                                                            { parse_modid $1    $loc }
+| CONID                                                                             { parse_modid $1    $loc }
 
 qdconid:
-| QCONID                                                                            { parse_qdcon $1 $loc            }
-| dcon                                                                              { qdcon (None, $1) $loc          }
+| QCONID                                                                            { parse_qdcon $1    $loc }
+| dcon                                                                              { qdcon (None, $1)  $loc }
 
 qtyconid:
-| QCONID                                                                            { parse_qtycon $1 $loc           }
-| tycon                                                                             { qtycon (None, $1) $loc         }
+| QCONID                                                                            { parse_qtycon $1   $loc }
+| tycon                                                                             { qtycon (None, $1) $loc }
 
 qvarid:
-| QVARID                                                                            { parse_qvar $1 $loc             }
-| var                                                                               { qvar (None, $1) $loc           }
+| QVARID                                                                            { parse_qvar $1     $loc }
+| var                                                                               { qvar (None, $1)   $loc }

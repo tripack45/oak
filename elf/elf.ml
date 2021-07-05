@@ -52,7 +52,7 @@ end = struct
     let () = print_endline ":: Warning :: current Layout Insensistive Info is legacy and doesn't ensure correctness." in
     let () = Lex.layout_insensitive_src src in *)
     let () = Driver.print_title "Info" "EL AST" in
-    let m = Parse.parse_src' src in
+    let m = Parse.parse_src src in
     let () = Parse.dump_with_layout @@ ElAst.ToString.m_to_string m in
     { meta; src; m }
 

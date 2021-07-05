@@ -66,8 +66,6 @@ sig
 end =
 struct
   open Core 
-
-  open R.Node
   open R.Syntax
 
   let (!) = modcon
@@ -102,9 +100,6 @@ end
 
 module SigResolved =
 struct 
-  open Core 
-
-  open R.Node
   open R.Syntax
 
   let (!) = modcon

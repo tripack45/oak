@@ -2,7 +2,7 @@
 open Oaklib
 let src = Src.Source.of_stdin ()
 
-(* module L = Lex.LayoutSensitiveLexer
+(* module L = Lex
 module T = L.T
 let _ =
   let lexbuf = Lexing.from_channel ~with_positions:true stdin in
@@ -33,7 +33,7 @@ let to_path str = ElAst.Path.Just (ElAst.MConId.of_string str)
 
 let mods = 
   [
-    (to_path "Stdin", Parse.parse_src' src);
+    (to_path "Stdin", Parse.parse_src src);
   ]
 
 let () = print_endline "----- [Info] EL AST -----"

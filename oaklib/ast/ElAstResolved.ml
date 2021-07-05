@@ -326,7 +326,6 @@ end
 
 module ToString = 
 struct
-  open Printf
   open Syntax
   open Util.Format
 

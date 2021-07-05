@@ -469,7 +469,7 @@ let ftv_in_typ typ =
  * In the meantime, there doesn't seem a way to type annotate this thing in Haskell even with 
  * language extention "ScopedTypeVariables"
  *)
-let rec ftv_in_pat annots pat = 
+let ftv_in_pat annots pat = 
   let rec r pat =
     match (Node.elem pat : P.pat) with 
     | P.Any 
