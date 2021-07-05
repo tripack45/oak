@@ -57,6 +57,18 @@ let () =
   Core.List.iter mods 
     ~f:(fun (_, m) -> Parse.dump_with_layout @@ ElAst.ToString.m_to_string m)
 
+let () = print_endline "----- [Phase] Lexical -----"
+let mods' = 
+  let open Pass.PhaseLexical in
+  match run mods with
+  | R.Ok v -> v 
+  | R.Error errors -> 
+    dump_errors src errors; assert false
+
+let () = 
+  Core.List.iter mods'
+    ~f:(fun (_, m) -> Parse.dump_with_layout @@ ElAstLexical.ToString.m_to_string m)
+
 let () = print_endline "----- [Phase] ResolveSymbols -----" 
 let mods = 
   let open Pass.PhaseResolveSymbols in
