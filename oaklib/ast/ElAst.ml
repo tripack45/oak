@@ -276,8 +276,9 @@ struct
     | Idents of exposing_ident list
 
   type mdecl = 
-    | MDecl of MConId.t node * exposing option
+    | MDecl of path' * exposing option
 
+  (* module alias is possible in import .. as .. *)
   type import = 
     | Import of path' * MConId.t node option * exposing option
 
@@ -400,7 +401,7 @@ struct
       | Idents of exposing_ident list
 
     type mdecl = Syntax.mdecl =
-      | MDecl of MConId.t node * exposing option
+      | MDecl of path' * exposing option
 
     type import = Syntax.import =
       | Import of path' * MConId.t node option * exposing option
@@ -487,12 +488,12 @@ struct
     | Any -> "(..)"
     | Idents ids -> surround ("(", ")") @@ concat_map ", " id_to_string ids 
     
-  and mdecl_to_string (MDecl (con, exposing_opt)) = 
+  and mdecl_to_string (MDecl (path, exposing_opt)) = 
     match exposing_opt with 
     | Some exposing -> 
-      sprintf "module %s exposing %s" (mcon_to_string con) (exposing_to_string exposing)
+      sprintf "module %s exposing %s" (path_to_string path) (exposing_to_string exposing)
     | None -> 
-      sprintf "module %s" (mcon_to_string con)
+      sprintf "module %s" (path_to_string path)
 
   and import_to_string (Import (path, as_opt, exposing_opt)) = 
     let exposing_str = 

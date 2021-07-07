@@ -198,7 +198,7 @@ elm_module:
 | LDELIM body RDELIM                                                                { Module.Mod (None, fst $2, snd $2) }
 
 module_decl :
-| option(PORT) MODULE c=CONID ex=option(exposing)                                   { mod_decl (mcon c $loc(c), ex) $loc }
+| option(PORT) MODULE c=modid ex=option(exposing)                                   { mod_decl (c, ex) $loc  }
 
 body:
 | impdecl SEMI body                                                                 { add_import $3 $1 }

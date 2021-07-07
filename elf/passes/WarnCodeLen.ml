@@ -277,11 +277,11 @@ let dump_result src (Size (plain, weighed), violations) =
     in 
     match site with
     | Module Some mdecl ->
-      let MDecl (mcon, _) = mdecl in
-      let (_, pos) = both mcon in
+      let MDecl (path, _) = mdecl in
+      let (_, pos) = both path in
       List.iter dump_binding ctx;
       Printf.printf "Module <%s> (at %s) below excceeds a code length upper bound with\n    - plain length of %d;\n    - weighed length of %.2f.\n\n%s"
-                    (ElAst.ToString.mcon_to_string mcon)
+                    (ElAst.ToString.path_to_string path)
                     (ElAst.ToString.pos_to_string pos)
                     plain 
                     weighed
