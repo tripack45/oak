@@ -115,7 +115,7 @@ and qcon_var =
     | _ as s                    { raise (T.UnmatchedToken s) }
 
 and line_tag start phrasebuf =
-    parse eof { EOF }
+    parse eof { T.EOF }
   | '\n'      { (
                 (* line_table := [((start, L.lexeme_end_p lexbuf), Core.String.of_char_list @@ List.rev phrasebuf)] :: !line_table;  *)
                 L.new_line lexbuf; initial lexbuf
