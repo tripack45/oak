@@ -214,6 +214,9 @@ struct
     | POW
     | COMPOSEL
     | COMPOSER
+  
+  (* unary operators are different from binary ones, so it's separated *)
+  type uop = UMINUS
 
   (* decl depends on the yet provided definition of type expr  *)
   (* We tvar' for both typ variables and row variables
@@ -250,6 +253,7 @@ struct
     | App        of expr' * (expr' list)
     (* Operators *)
     | Infix      of op * expr' * expr'
+    | Unary      of uop * expr'
     | OpFunc     of op
     (* Builtin Types *)
     | Unit
@@ -337,6 +341,8 @@ struct
       | COMPOSEL
       | COMPOSER
 
+    type uop = Syntax.uop = UMINUS
+
     type expr = Syntax.expr =
       (* Control flow constructs *)
       | Let        of decl' list * expr'
@@ -346,6 +352,7 @@ struct
       | App        of expr' * (expr' list) 
       (* Operators *)
       | Infix      of op * expr' * expr'
+      | Unary      of uop * expr'
       | OpFunc     of op
       (* Builtin Types *)
       | Unit
@@ -574,6 +581,8 @@ struct
     | POW      -> "^"
     | COMPOSEL -> "<<"
     | COMPOSER -> ">>"
+  and uop_to_string = function
+    | UMINUS   -> "-"
 
   and expr_to_string e =
     let pp = expr_to_string in
@@ -589,6 +598,7 @@ struct
       | Lambda (pats, e)   -> sprintf "fn %s = {%s}" (concat_map " " pat_to_string pats) (pp e)
       | App (e, es)        -> concat_map " " pp (e::es)
       | Infix (op, e1, e2) -> sprintf "%s %s %s" (pp e1) (op_to_string op) (pp e2)
+      | Unary (uop, e)     -> sprintf "%s%s" (uop_to_string uop) (pp e)
       | OpFunc op          -> surround ("(", ")") (op_to_string op)
       | Unit               -> "()"
       | Tuple es           -> surround ("(", ")") @@ concat_map ", " pp es

@@ -588,6 +588,9 @@ let rec translate_expr (ctx : Ctx.t) dicts (expr : P.expr') : R.expr' rslt =
     let* e1' = tr e1 
     and* e2' = tr e2 in 
     ok' @@ R.Infix (op, e1', e2')
+  | P.Unary (uop, e) ->
+    let* e' = tr e in 
+    ok' @@ R.Unary (uop, e')
   | P.OpFunc op            -> ok' @@ R.OpFunc op
   | P.Unit                 -> ok' @@ R.Unit
   | P.Literal l            -> ok' @@ R.Literal l

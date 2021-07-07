@@ -160,6 +160,9 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
       let+ e1' = resolve_expr' e1 
       and+ e2' = resolve_expr' e2 in 
       Infix (op, e1', e2')
+    | Unary (uop, e)   -> 
+      let+ e' = resolve_expr' e in 
+      Unary (uop, e')
     | Tuple es             -> let+ es' = resolve_exprs' es in Tuple es'
     | List es              -> let+ es' = resolve_exprs' es in List es'
     | Record fields        -> 

@@ -130,6 +130,7 @@ let run ?(max_depth=5) ?soft (Mod (_mdecl, _imports, decls)) : result =
       | If (e0, (e1, e2))  -> dep e0 <*> dep e1 <*> dep e2
       | App (e, es)        -> dep e  <*> R.Par.map_then es ~fmap:dep ~fthen:maxints
       | Infix (_, e0, e1)  -> (dep e0) <*> (dep e1)
+      | Unary (_, e)       -> dep e
       | Tuple es           -> R.Par.map_then es ~fmap:dep ~fthen:maxints
       | List es            -> R.Par.map_then es ~fmap:dep ~fthen:maxints
       | Record field_exprs -> R.Par.map_then field_exprs ~fmap:(fun fe -> dep @@ snd fe) ~fthen:maxints

@@ -168,6 +168,7 @@ struct
   type pat' = pat node
 
   type op   = ElAst.Syntax.op
+  type uop  = ElAst.Syntax.uop
 
   type expr = 
     (* Control flow constructs *)
@@ -178,6 +179,7 @@ struct
     | App        of expr' * (expr' list)
     (* Operators *)
     | Infix      of op * expr' * expr'
+    | Unary      of uop * expr'
     | OpFunc     of op
     (* Builtin Types *)
     | Unit
@@ -292,6 +294,7 @@ struct
       | App        of expr' * (expr' list)
       (* Operators *)
       | Infix      of op * expr' * expr'
+      | Unary      of uop * expr'
       | OpFunc     of op
       (* Builtin Types *)
       | Unit
@@ -333,6 +336,7 @@ struct
 
   let pos_to_string   = ElAst.ToString.pos_to_string
   let op_to_string    = ElAst.ToString.op_to_string
+  let uop_to_string    = ElAst.ToString.uop_to_string
   let lit_to_string   = ElAst.ToString.lit_to_string
   let field_to_string = ElAst.ToString.field_to_string
 
@@ -531,6 +535,7 @@ struct
     | Lambda (pats, e)   -> sprintf "fn %s = {%s}" (concat_map " " pat_to_string pats) (pp e)
     | App (e, es)        -> concat_map " " pp (e::es)
     | Infix (op, e1, e2) -> sprintf "%s %s %s" (pp e1) (op_to_string op) (pp e2)
+    | Unary (uop, e)     -> sprintf "%s%s" (uop_to_string uop) (pp e)
     | OpFunc op          -> surround ("(", ")") (op_to_string op)
     | Unit               -> "()"
     | Tuple es           -> surround ("(", ")") @@ concat_map ", " pp es

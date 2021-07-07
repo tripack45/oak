@@ -248,6 +248,7 @@ struct
       | If (e0, (e1, e2))  -> merge_results [bare @@ Size(3, 4.); siz e0; siz e1; siz e2]
       | App (e, es)        -> merge_results @@ siz e :: List.map siz es
       | Infix (op, e0, e1) -> merge_results [op_size op; siz e0; siz e1]
+      | Unary (op, e)      -> merge_results [op_size op; siz e]
       | Tuple es           -> merge_results @@ readable :: (List.map siz es)
       | List es            -> merge_results @@ readable :: (List.map siz es)
       | Record field_exprs -> merge_results @@ List.map (fun fe -> siz @@ snd fe) field_exprs

@@ -92,6 +92,7 @@ struct
 
   (* Operator intermediate value *)
   let op2expr op e1 e2 = Infix (op, e1, e2) 
+  let unary   op e     = Unary (op, e) 
 
   let op2opfunc op = OpFunc op
 
@@ -332,17 +333,17 @@ cexp:
 | CASE e=exp OF LDELIM alts=separated_list(SEMI, alt) RDELIM                        { expr (Expr.Case (e, alts))    $loc }
 
 infixexp_exp:
-| infixexp qop infixexp_exp                                                         { expr (op2expr $2 $1 $3) $loc }
+| infixexp qop infixexp_exp                                                         { expr (op2expr $2 $1 $3)       $loc }
 | cexp                                                                              { $1 }
 
 infixexp:
-| infixexp qop infixexp                                                             { expr (op2expr $2 $1 $3) $loc   }
-| MINUS aexp                                                                        { assert false }
+| infixexp qop infixexp                                                             { expr (op2expr $2 $1 $3)       $loc }
+| MINUS aexp                                                                        { expr (unary Expr.UMINUS $2)   $loc }
 | fexp                                                                              { $1 }
 | aexp                                                                              { $1 }
 
 fexp:
-| aexp nonempty_list(aexp)                                                          { expr (Expr.App ($1, $2)) $loc  }
+| aexp nonempty_list(aexp)                                                          { expr (Expr.App ($1, $2))  $loc }
 
 aexp :
 | qvar                                                                              { expr (Expr.Var $1)        $loc }
