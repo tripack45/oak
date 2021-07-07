@@ -362,6 +362,7 @@ let collect_binders (pat : P.pat') : R.varid' list rslt =
     | P.Unit 
     | P.EmptyList 
     | P.Literal _     -> ok acc
+    | P.Cons (p, pn)  -> Rst.Seq.fold [p; pn] ~init:(ok acc) ~f
     | P.List pats     -> Rst.Seq.fold pats ~init:(ok acc) ~f
     | P.Tuple pats    -> Rst.Seq.fold pats ~init:(ok acc) ~f
     | P.Con (_, pats) -> Rst.Seq.fold pats ~init:(ok acc) ~f
@@ -474,6 +475,7 @@ let rec ftv_in_pat annots pat =
     | P.Unit 
     | P.EmptyList 
     | P.Literal _     -> []
+    | P.Cons (p, pn)  -> List.concat_map [p; pn] ~f:r
     | P.List pats     -> List.concat_map pats ~f:r
     | P.Tuple pats    -> List.concat_map pats ~f:r
     | P.Con (_, pats) -> List.concat_map pats ~f:r
@@ -490,13 +492,14 @@ let rec translate_pat (amap : amap) (ctx : Ctx.t) dicts (pat : P.pat') =
   let tr  = translate_pat amap ctx dicts in
   let trs = Rst.Par.map ~f:tr  in
   match elem with 
-  | P.Any         -> ok' R.Any
-  | P.Unit        -> ok' A.Pat.Unit
-  | P.EmptyList   -> ok' R.EmptyList
-  | P.Literal lit -> ok' @@ A.Pat.Literal lit
-  | P.List pats   -> let* pats' = trs pats in ok' @@ A.Pat.List pats' 
-  | P.Tuple pats  -> let* pats' = trs pats in ok' @@ A.Pat.Tuple pats'
-  | P.Var v       -> 
+  | P.Any          -> ok' R.Any
+  | P.Unit         -> ok' A.Pat.Unit
+  | P.EmptyList    -> ok' R.EmptyList
+  | P.Literal lit  -> ok' @@ A.Pat.Literal lit
+  | P.Cons (p, pn) -> let* (p', pn') = tr p ** tr pn in ok' @@ A.Pat.Cons (p', pn') 
+  | P.List pats    -> let* pats' = trs pats in ok' @@ A.Pat.List pats' 
+  | P.Tuple pats   -> let* pats' = trs pats in ok' @@ A.Pat.Tuple pats'
+  | P.Var v        -> 
     let* twin = lookup_binder ctx.vctx v in (
       match Map.find amap (Node.elem v) with
       | None -> ok' @@ A.Pat.Var (twin, None)

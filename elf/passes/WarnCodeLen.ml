@@ -147,6 +147,7 @@ struct
     | Unit                       -> trival
     | EmptyList                  -> readable
     | Literal   (lit')           -> lit_size lit'
+    | Cons      (pat', pat'')    -> merge_results @@ readable :: pat_size pat' :: pat_size pat'' :: []
     | List      (pat's)          -> merge_results @@ readable :: (List.map pat_size pat's)
     | Tuple     (pat's)          -> merge_results @@ readable :: (List.map pat_size pat's)
     | Con       (qdcon', pat's)  -> merge_results @@ qdcon_size qdcon' :: (List.map pat_size pat's)

@@ -159,6 +159,7 @@ struct
     | Unit 
     | EmptyList
     | Literal    of lit'
+    | Cons       of pat node * pat node
     | List       of pat node list
     | Tuple      of pat node list
     | Con        of dconref' * (pat node list)
@@ -253,6 +254,7 @@ struct
     | Literal _           -> []
     | Var (_, None)       -> []
     | Var (_, Some annot) -> [annot]
+    | Cons (p, pn)        -> annots_in_pat p @ annots_in_pat pn
     | List pats           -> Core.List.concat_map pats ~f:annots_in_pat
     | Tuple pats          -> Core.List.concat_map pats ~f:annots_in_pat
     | Con (_, pats)       -> Core.List.concat_map pats ~f:annots_in_pat
@@ -270,9 +272,10 @@ struct
       | Unit 
       | EmptyList
       | Literal    of lit'
-      | List       of pat node list
-      | Tuple      of pat node list
-      | Con        of dconref' * (pat node list)
+      | Cons       of pat' * pat'
+      | List       of pat' list
+      | Tuple      of pat' list
+      | Con        of dconref' * (pat' list)
   end
 
   module Expr = 
@@ -474,6 +477,7 @@ struct
     | Unit         -> "()"
     | EmptyList    -> "[]"
     | Literal lit  -> lit_to_string lit
+    | Cons (p, pn) -> pat_to_string p ^ " :: " ^ pat_to_string pn
     | List pats    -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
     | Tuple pats   -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
     | Con (con, pats) -> 

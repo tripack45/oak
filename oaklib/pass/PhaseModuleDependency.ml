@@ -184,6 +184,9 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
     | Var _ -> ok pat
     | List pats   -> let+ pats' = resolve_pats' pats in Alias.Pattern.List pats'
     | Tuple pats  -> let+ pats' = resolve_pats' pats in Alias.Pattern.Tuple pats'
+    | Cons (p, pn) -> let+ (p', pn') = resolve_pat' p ** resolve_pat' pn 
+                      in Alias.Pattern.Cons (p', pn')
+    | Record _     -> failwith "Unimplemented: record pat resolve"
     | Con (qdcon, pats) -> 
       let+ pats'  = resolve_pats' pats 
       and+ qdcon' = (lift_node resolve_qdcon) qdcon in

@@ -176,6 +176,7 @@ struct
     | Unit 
     | EmptyList
     | Literal    of lit'
+    | Cons       of (pat node) * (pat node)
     | List       of (pat node) list
     | Tuple      of (pat node) list
     | Con        of qdcon' * (pat node list)
@@ -308,6 +309,7 @@ struct
       | Unit 
       | EmptyList
       | Literal    of lit'
+      | Cons       of pat' * pat'
       | List       of pat' list
       | Tuple      of pat' list
       | Con        of qdcon' * (pat' list)
@@ -532,13 +534,14 @@ struct
 
   and pat_to_string pat = 
     match Node.elem pat with
-    | Var var      -> var_to_string var
-    | Any          -> "_"
-    | Unit         -> "()"
-    | EmptyList    -> "[]"
-    | Literal lit  -> lit_to_string lit
-    | List pats   -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
-    | Tuple pats  -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
+    | Var var       -> var_to_string var
+    | Any           -> "_"
+    | Unit          -> "()"
+    | EmptyList     -> "[]"
+    | Literal lit   -> lit_to_string lit
+    | Cons (p1, p2) -> pat_to_string p1 ^ " :: " ^ pat_to_string p2
+    | List pats     -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
+    | Tuple pats    -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
     | Con (qdcon, pats) -> 
       match pats with 
       | [] -> qdcon_to_string qdcon

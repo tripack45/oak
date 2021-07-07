@@ -402,13 +402,16 @@ fbind :
 pat:
 | lpat                                                                              { $1 }
 
+lpat: 
+| p=qpat CONS pn=lpat                                                               { pat (Pattern.Cons (p, pn))   $loc }
+| qpat                                                                              { $1 } 
+
 // Haskell syntax allows for gcon instead of qcon in non atomic rule possibly 
 // for support in function arguments. Let's restrict the patter to qcon
 // for now and see how it goes
-lpat: 
-// | apat                                                                              { pat (Pattern.Any) $loc }                                
-| apat                                                                              { $1 }                                
+qpat:
 | qdcon nonempty_list(apat)                                                         { pat (Pattern.Con ($1, $2))   $loc }
+| apat                                                                              { $1 } 
 
 apat:
 | var                                                                               { pat (Pattern.Var $1)         $loc }
