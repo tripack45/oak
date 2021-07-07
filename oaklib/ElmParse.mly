@@ -29,6 +29,13 @@ struct
 
   let field name pos : field' = node (FieldId.of_string name) pos
 
+  let record_pat_field var's : (field * pat') list = 
+    let f var' =
+      let (var, pos) = both var' in
+      let field = FieldId.of_string @@ VarId.to_string var in
+      (field, (node (ElAst.Alias.Pattern.Var var') pos))
+    in List.map f var's
+
   let qvar   (path, var) pos : qvar'   = node (QVar (path, var)) pos
   let qtycon (path, con) pos : qtycon' = node (QTyCon (path, con)) pos
   let qdcon  (path, con) pos : qdcon'  = node (QDCon (path, con)) pos
@@ -416,10 +423,12 @@ qpat:
 apat:
 | var                                                                               { pat (Pattern.Var $1)         $loc }
 | gcon                                                                              { pat (gcon2pat $1)            $loc }
-| LBRACE separated_list(COMMA, var) RBRACE                                          { assert false                      }
 | literal                                                                           { pat (Pattern.Literal $1)     $loc }
 | UNDERSCORE                                                                        { pat (Pattern.Any)            $loc }
 | LPAREN p=pat COMMA ps=separated_nonempty_list(COMMA, pat) RPAREN                  { pat (Pattern.Tuple (p::ps))  $loc }
+// { x, y, z } treated as a shorthand of { x = x, y = y, z = z }
+| LBRACE separated_list(COMMA, var) RBRACE                                          { pat (Pattern.Record 
+                                                                                            (record_pat_field $2)) $loc }
 | LKET   ps=separated_nonempty_list(COMMA, pat) RKET                                { pat (Pattern.List ps)        $loc }
 // There is no realistic way to factor patterns (or types) so we will not 
 // track its parenthese depths

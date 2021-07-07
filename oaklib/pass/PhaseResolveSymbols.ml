@@ -365,6 +365,7 @@ let collect_binders (pat : P.pat') : R.varid' list rslt =
     | P.Cons (p, pn)  -> Rst.Seq.fold [p; pn] ~init:(ok acc) ~f
     | P.List pats     -> Rst.Seq.fold pats ~init:(ok acc) ~f
     | P.Tuple pats    -> Rst.Seq.fold pats ~init:(ok acc) ~f
+    | P.Record _      -> failwith "Unimplemented: record pat resolve"
     | P.Con (_, pats) -> Rst.Seq.fold pats ~init:(ok acc) ~f
     | P.Var v -> 
       let eq v1 v2 = ElAst.VarId.compare (Node.elem v1) (Node.elem v2) = 0 in
@@ -478,6 +479,7 @@ let rec ftv_in_pat annots pat =
     | P.Cons (p, pn)  -> List.concat_map [p; pn] ~f:r
     | P.List pats     -> List.concat_map pats ~f:r
     | P.Tuple pats    -> List.concat_map pats ~f:r
+    | P.Record _      -> failwith "Unimplemented: record pat resolve"
     | P.Con (_, pats) -> List.concat_map pats ~f:r
     | P.Var v -> 
       match Map.find annots (Node.elem v) with
@@ -499,7 +501,8 @@ let rec translate_pat (amap : amap) (ctx : Ctx.t) dicts (pat : P.pat') =
   | P.Cons (p, pn) -> let* (p', pn') = tr p ** tr pn in ok' @@ A.Pat.Cons (p', pn') 
   | P.List pats    -> let* pats' = trs pats in ok' @@ A.Pat.List pats' 
   | P.Tuple pats   -> let* pats' = trs pats in ok' @@ A.Pat.Tuple pats'
-  | P.Var v        -> 
+  | P.Record _    -> failwith "Unimplemented: record pat resolve"
+  | P.Var v       -> 
     let* twin = lookup_binder ctx.vctx v in (
       match Map.find amap (Node.elem v) with
       | None -> ok' @@ A.Pat.Var (twin, None)

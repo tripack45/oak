@@ -150,6 +150,7 @@ struct
     | Cons      (pat', pat'')    -> merge_results @@ readable :: pat_size pat' :: pat_size pat'' :: []
     | List      (pat's)          -> merge_results @@ readable :: (List.map pat_size pat's)
     | Tuple     (pat's)          -> merge_results @@ readable :: (List.map pat_size pat's)
+    | Record    (fs)             -> merge_results @@ readable :: (List.map (fun (f, _) -> field_size (node f ())) fs)
     | Con       (qdcon', pat's)  -> merge_results @@ qdcon_size qdcon' :: (List.map pat_size pat's)
 
   let rec typ_size typ' =

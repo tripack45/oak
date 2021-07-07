@@ -179,6 +179,8 @@ struct
     | Cons       of (pat node) * (pat node)
     | List       of (pat node) list
     | Tuple      of (pat node) list
+    | Record     of (field * pat node) list
+    (* Data constructor; Todo: DCon *)
     | Con        of qdcon' * (pat node list)
   type pat' = pat node
 
@@ -312,6 +314,7 @@ struct
       | Cons       of pat' * pat'
       | List       of pat' list
       | Tuple      of pat' list
+      | Record     of (field * pat') list
       | Con        of qdcon' * (pat' list)
 
     type pat' = Syntax.pat'
@@ -542,6 +545,7 @@ struct
     | Cons (p1, p2) -> pat_to_string p1 ^ " :: " ^ pat_to_string p2
     | List pats     -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
     | Tuple pats    -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
+    | Record (fields) -> surround ("{", "}") @@ concat_map ", " (fun (f, _pat) -> FieldId.to_string f) fields
     | Con (qdcon, pats) -> 
       match pats with 
       | [] -> qdcon_to_string qdcon

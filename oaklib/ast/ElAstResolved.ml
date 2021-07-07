@@ -162,6 +162,7 @@ struct
     | Cons       of pat node * pat node
     | List       of pat node list
     | Tuple      of pat node list
+    | Record     of field' list
     | Con        of dconref' * (pat node list)
 
   type pat' = pat node
@@ -257,6 +258,7 @@ struct
     | Cons (p, pn)        -> annots_in_pat p @ annots_in_pat pn
     | List pats           -> Core.List.concat_map pats ~f:annots_in_pat
     | Tuple pats          -> Core.List.concat_map pats ~f:annots_in_pat
+    | Record _            -> []
     | Con (_, pats)       -> Core.List.concat_map pats ~f:annots_in_pat
 end
 
@@ -275,6 +277,7 @@ struct
       | Cons       of pat' * pat'
       | List       of pat' list
       | Tuple      of pat' list
+      | Record     of field' list
       | Con        of dconref' * (pat' list)
   end
 
@@ -480,6 +483,7 @@ struct
     | Cons (p, pn) -> pat_to_string p ^ " :: " ^ pat_to_string pn
     | List pats    -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
     | Tuple pats   -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
+    | Record fs    -> surround ("{", "}") @@ concat_map ", " field_to_string fs
     | Con (con, pats) -> 
       match pats with 
       | [] -> dconref_to_string con
