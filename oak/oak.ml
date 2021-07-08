@@ -45,9 +45,13 @@ let () = print_endline "----- [Phase] ResolveModuleDependency -----"
 let mods = 
   let open Pass.PhaseResolveModuleDependency in
   match run mods with
-  | R.Ok v -> v |> Core.List.map ~f:(fun (path, (_, m)) -> (path, m))
-  | R.Error errors -> 
-    dump_errors src errors; assert false
+  | R.Ok (v, warns) -> 
+    dump_warnings src warns; 
+    v
+  | R.Error (errors, warns) -> 
+    dump_warnings src warns; 
+    dump_errors src errors; 
+    assert false
 
 let () = 
   Core.List.iter mods 

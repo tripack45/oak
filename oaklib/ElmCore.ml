@@ -10,6 +10,8 @@ let nullnode e = R.Node.node e nullpos
 let modcon con : path = R.Syntax.Just (R.MConId.of_string con)
 let under_con con path : path = R.Syntax.More (R.MConId.of_string con, path)
 
+let mcon_core = R.MConId.of_string "Core"
+
 module PathAlias : 
 sig
   val aliases : (path * path) list 

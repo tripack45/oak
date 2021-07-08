@@ -8,15 +8,19 @@ open ElAst.Syntax
 module Map = ElAst.Path.Map
 type path_dict = path Path.Map.t
 
-module R = Util.PassResult.ErrorList
+module R = Util.PassResult.WarnListErrorList
 open R.Pervasive
 
-type error = 
-  | ModAliasCollision      of (path' * mcon') * path
-  | DuplicatedImport       of path'
-  | UndefinedModReference  of path'
+type warn =
+  | UndefinedModuleReference of path * path
 
-type 'a rslt = ('a, error) R.t
+type error = 
+  | ModAliasCollision        of (path' * mcon') * path
+  | DuplicatedImport         of path'
+  | UndefinedModReference    of path'
+  | CyclicModuleDependency
+
+type 'a rslt = ('a, warn, error) R.t
 
 let lift_node f node = 
   let* elem' = f (Node.elem node) in
@@ -224,8 +228,51 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
  * If the mod dependencies does not form a cycle, an list of mods orded by rpo 
  * is returned, otherwise at least one example of cyclic dependency is found are reporetd. 
  *)
-let mods_dep_rpo mods = 
-  ok mods
+let topsort ?(ignore_undefined=false) mods = 
+  let open Util.Graph in
+  try 
+    let paths = Path.Set.of_list (List.map mods ~f:fst) in
+    let* deps = 
+      R.Seq.foldi mods ~init:(ok Path.Map.empty) ~f:(
+        fun i map (path, (deps, m)) ->
+          let* deps = 
+            R.Seq.filter_map deps ~f:(
+              fun path' ->
+                match path' with 
+                | More (mcon, _) when MConId.equal mcon ElmCore.mcon_core -> 
+                  (* Modules of Elm standard library need not to be defined *)
+                  ok None
+                | _ -> 
+                  if not ignore_undefined then 
+                    (* If all modules must be defined then all dependencies 
+                     * must be provided *)
+                    ok @@ Some path'
+                  else 
+                    (* If we allow dependencies to be undefined, we strip dependencies
+                     * that are undefined *)
+                    if Set.mem paths path' then 
+                      ok @@ Some path'
+                    else
+                      warn None (UndefinedModuleReference (path, path'))
+            )
+            >>| Path.Set.of_list
+          in
+          let key  = path
+          and attr = (i, (path, m)) in
+          ok @@ Map.add_exn map ~key ~data:(attr, deps)
+      )
+      >>| Directed.of_adj_set_exn
+    in 
+    deps 
+    |> Directed.TopologicalSort.topsort_attr ~compare:(
+        fun (i, _) (j, _) -> Int.compare i j 
+      )
+    |> Sequence.to_list
+    |> List.map ~f:(Directed.V.attr_exn deps)
+    |> List.map ~f:snd
+    |> ok
+  with 
+  Directed.TopologicalSort.GraphIsCyclic -> err @@ CyclicModuleDependency
 
 let run (mods : (Path.t * m) list) =
   R.run 
@@ -233,7 +280,7 @@ let run (mods : (Path.t * m) list) =
       let* path_expanded_mods = 
         R.Par.map mods ~f:(fun (path, m) -> let+ m' = expand_path_alias m in (path, m'))
       in 
-      mods_dep_rpo path_expanded_mods 
+      topsort ~ignore_undefined:true path_expanded_mods 
     end
   
 let dump_errors src errors = 
@@ -256,7 +303,20 @@ let dump_errors src errors =
         (ToString.path_to_string path')
         (ToString.pos_to_string (Node.attr path'))
         (Src.Source.lines src (Node.attr path'))
+    | CyclicModuleDependency ->
+      printf "Module dependency is cyclic.\n"
   in
   List.iteri errors ~f:(
     fun _idx entry -> dump_entry entry
+  )
+
+let dump_warnings _src warns =
+  let dump_warn = function
+    | UndefinedModuleReference (path, path') ->
+      printf "Module %s depends on undefined module %s.\n" 
+        (Path.to_string path)
+        (Path.to_string path')
+  in
+  List.iteri warns ~f:(
+    fun _idx entry -> dump_warn entry
   )
