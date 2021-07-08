@@ -119,7 +119,7 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
         fun (f_node, t_node) -> 
           (lift_node resolve_typ) t_node >>| fun t_node' -> (f_node, t_node')
       ) in
-      Extension (r_node', fields')
+      Alias.Typ.Extension (r_node', fields')
     | Fields fields ->
       let+ fields' = R.Par.map fields ~f:(
         fun (f_node, t_node) -> 
@@ -174,6 +174,15 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
           fun (fid, e) -> let+ e' = resolve_expr' e in (fid, e')
       ) in
       Record fields'
+    | Project    (e, f)    ->
+      let+ e' = resolve_expr' e in
+      Project    (e', f)
+    | Extension (e, fes)   ->
+      let+ e' = resolve_expr' e 
+      and+ fes' = R.Par.map fes ~f:(
+          fun (fid, e) -> let+ e' = resolve_expr' e in (fid, e')
+      ) in
+      Extension (e', fes')
     | Var qvar             -> let+ qv' = (lift_node resolve_qvar) qvar in Alias.Expr.Var qv'
     | Con (qdcon, es)      -> 
       let+ qdcon' = (lift_node resolve_qdcon) qdcon 

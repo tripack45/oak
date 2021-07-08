@@ -354,6 +354,8 @@ aexp :
 | LPAREN e = exp COMMA es =separated_nonempty_list(COMMA, exp) RPAREN               { expr (Expr.Tuple (e::es)) $loc }
 | LKET   es = separated_nonempty_list(COMMA, exp) RKET                              { expr (Expr.List es)       $loc }
 | LBRACE separated_list(COMMA, fbind) RBRACE                                        { expr (Expr.Record $2)     $loc }
+| aexp DOT fieldid                                                                  { expr (Expr.Project   ($1, $3)) $loc }
+| LBRACE exp BAR separated_nonempty_list(COMMA, fbind) RBRACE                       { expr (Expr.Extension ($2, $4)) $loc }
 
 /* Elm forbids uses of operator such a (+ 1) and (+ 2) but allows (+) */ 
 | LPAREN qop RPAREN                                                                 { expr (op2opfunc $2)       $loc }
@@ -384,13 +386,13 @@ aexp :
 
 // Global constructors
 gcon:
-| LPAREN RPAREN                                                                     { Unit               }
-| LKET   RKET                                                                       { EmptyList          }
-| qdcon                                                                             { QDCon $1           }
+| LPAREN RPAREN                                                                     { Unit          }
+| LKET   RKET                                                                       { EmptyList     }
+| qdcon                                                                             { QDCon $1      }
 
 // Casing branches
 alt:
-| pat ARROW exp                                                                     { ($1, $3)           }
+| pat ARROW exp                                                                     { ($1, $3)      }
 
 // This is syntax for record expressions
 //     { field = e1, field = e2 }
@@ -401,7 +403,7 @@ alt:
 // nor does it reference a qualified variable from another module. It's just a label of variable-like syntax.
 // Hence VARID should be used
 fbind :
-| fieldid EQ e=exp                                                                  { ($1, e)              }
+| fieldid EQ e=exp                                                                  { ($1, e)       }
 
 // Pattern language 
 pat:

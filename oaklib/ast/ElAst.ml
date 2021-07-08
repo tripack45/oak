@@ -259,6 +259,8 @@ struct
     | Tuple      of expr' list  (* >= 2 elements *)
     | List       of expr' list  (* >= 0 elements *)
     | Record     of (field' * expr') list
+    | Project    of expr' * field' (* Record Access    *)
+    | Extension  of expr' * (field' * expr') list 
     (* Data construction; Todo: DCon *)
     | Con        of qdcon' * (expr' list)
     (* Identifier refernce *)
@@ -358,6 +360,8 @@ struct
       | Tuple      of expr' list  (* >= 2 elements *)
       | List       of expr' list  (* >= 0 elements *)
       | Record     of (field' * expr') list
+      | Project    of expr' * field' (* Record Access    *)
+      | Extension  of expr' * (field' * expr') list 
       (* Data construction *)
       | Con        of qdcon' * (expr' list)
       (* Identifier refernce *)
@@ -605,6 +609,10 @@ struct
       | Record field_es    -> 
         let record_field (f, e) = field_to_string f ^ " = " ^ pp e in
         surround ("<{", "}>") @@ (concat_map ";" record_field field_es)
+      | Project    (e, f)  -> sprintf "%s.%s" (pp e) (field_to_string f)
+      | Extension  (e, fs) -> 
+        let record_field (f, e) = field_to_string f ^ " = " ^ pp e in
+        surround ("<{", "}>") @@ sprintf "%s @ %s" (pp e) (concat_map ";" record_field fs)
       | Con (qdcon, es)    -> qdcon_to_string qdcon ^ concat_map " " pp es
       | Var qvar           -> qvar_to_string qvar
       | Literal lit        -> lit_to_string lit

@@ -321,6 +321,8 @@ struct
       | Tuple es           -> ok readable <*> R.Par.map_then es ~fmap:siz ~fthen:merge_sizes
       | List es            -> ok readable <*> R.Par.map_then es ~fmap:siz ~fthen:merge_sizes
       | Record field_exprs -> R.Par.map_then field_exprs ~fmap:(fun fe -> siz @@ snd fe) ~fthen:merge_sizes
+      | Project    (e, f)  -> siz e <*> field_size f
+      | Extension  (e, fs) -> ok readable <*> siz e <*> R.Par.map_then fs ~fmap:(fun fe -> siz @@ snd fe) ~fthen:merge_sizes
       | Con (qdcon', es)   -> qdcon_size qdcon' <*> R.Par.map_then es ~fmap:siz ~fthen:merge_sizes
       | Var qvar'          -> qvar_size qvar'
       | Literal  lit'      -> lit_size lit'

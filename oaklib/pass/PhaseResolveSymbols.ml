@@ -541,7 +541,7 @@ and translate_typ (tctx, tvctx) dicts (typ : P.typ') =
       | P.Extension (row, fields) -> 
         let+ row' = translate_row row 
         and+ fields' = Rst.Par.map ~f:translate_field fields in
-        R.Extension (row', fields')
+        A.Typ.Extension (row', fields')
       | P.Fields fields ->
         let+ fields' = Rst.Par.map ~f:translate_field fields in
         R.Fields fields'
@@ -601,6 +601,8 @@ let rec translate_expr (ctx : Ctx.t) dicts (expr : P.expr') : R.expr' rslt =
       fun (field, e) -> let+ e' = tr e in (field, e')
     ) in
     ok' @@ R.Record fields'
+  | P.Project    (_e, _f)  -> failwith "Unimplemented Project   "
+  | P.Extension (_e, _fes) -> failwith "Unimplemented Extension"
   | P.Var v                -> let* v' = resolve_var dicts.vctx ctx.vctx v in ok' @@ R.Var v'
   | P.Con (qcon, es)       -> 
     let* con' = resolve_dcon dicts.dctx ctx.dctx qcon
