@@ -99,20 +99,25 @@ end
 
 let () =
   let argc = Array.length Sys.argv in
-  if argc == 1 then 
-    ElmModule.of_chn "Stdin" stdin 
+  if argc == 1 then
+    ElmModule.of_chn "Stdin" stdin
     |> ElmModule.analysis_m
-    |> (fun x -> [x]) 
-    |> ElmModule.resolve_module_dependency 
-    |> ElmModule.resolve_ast 
+    |> (fun x -> [x])
+    |> ElmModule.resolve_module_dependency
+    |> ElmModule.resolve_ast
     |> ignore
   else
-  let path = Array.get Sys.argv 1 in
-  Driver.print_title "Info" @@ Printf.sprintf "Searching: \"%s\"" path;
   let open Oaklib.Driver in
-  SrcFull path
-    |> traverse_elm_proj_root 
-    |> List.map (fun (SrcName n, SrcFull x) -> ElmModule.create_meta n x)
+  let proj_path = Array.get Sys.argv 1 in
+  let () = print_title "Info" @@ Printf.sprintf "Searching: \"%s\"" proj_path in
+  let src_dir = Core.Filename.concat proj_path "src" in
+  SrcFull src_dir
+    |> find_elm
+    |> List.map (
+        fun (SrcName n, x) ->
+          let x = Core.Filename.concat src_dir x in
+          ElmModule.create_meta n x
+      )
     |> List.map ElmModule.of_meta
     |> List.map ElmModule.analysis_m
     |> ElmModule.resolve_module_dependency
