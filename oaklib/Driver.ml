@@ -79,7 +79,7 @@ let find_elm (SrcFull src) =
   res
 
 let print_title category content =
-  let make_up str = if Core.String.length str mod 2 == 0 then str else str ^ " " in
+  let make_up str = if Core.String.length str mod 2 = 0 then str else str ^ " " in
   (* let center fixed txt = 
     let txt_len = Core.String.length txt in
     let len = max fixed txt_len in

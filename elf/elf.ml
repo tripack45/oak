@@ -63,8 +63,7 @@ end = struct
     let () = close_in chn in
     t
 
-  let analysis_m modl =
-    let { src; m; _ } = modl in
+  let analysis_m ({ src; m; _ } as modl) =
     let () = Driver.print_title "Analysis" "ParenthesesDepth" in
     let () = ElfPass.WarnParentheseDepth.dump_result src 
              @@ ElfPass.WarnParentheseDepth.run ~max_depth:max_paren_depth m in
@@ -99,7 +98,7 @@ end
 
 let () =
   let argc = Array.length Sys.argv in
-  if argc == 1 then
+  if argc = 1 then
     ElmModule.of_chn "Stdin" stdin
     |> ElmModule.analysis_m
     |> (fun x -> [x])

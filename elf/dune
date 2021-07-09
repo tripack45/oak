@@ -4,3 +4,7 @@
   (libraries oaklib))
 
 (include_subdirs unqualified)
+
+(env
+  (_ 
+    (flags (:standard -warn-error -A))))

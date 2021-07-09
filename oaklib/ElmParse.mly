@@ -204,18 +204,18 @@ elm_module:
 | LDELIM body RDELIM                                                                { Module.Mod (None, fst $2, snd $2) }
 
 module_decl :
-| option(PORT) MODULE c=modid ex=option(exposing)                                   { mod_decl (c, ex) $loc  }
+| option(PORT) MODULE c=modid ex=option(exposing)                                   { mod_decl (c, ex)  $loc }
 
 body:
-| impdecl SEMI body                                                                 { add_import $3 $1 }
-| separated_list(SEMI, topdecl)                                                     { mod_decls $1     }
-| impdecl                                                                           { add_import ([], []) $1 }
+| impdecl SEMI body                                                                 { add_import $3 $1        }
+| separated_list(SEMI, topdecl)                                                     { mod_decls $1            }
+| impdecl                                                                           { add_import ([], []) $1  }
 
 impdecl:
-| IMPORT qc=modid as_con=option(as_con) ex=option(exposing)                         { mod_import (qc, as_con, ex) $loc} 
+| IMPORT qc=modid as_con=option(as_con) ex=option(exposing)                         { mod_import (qc, as_con, ex) $loc } 
 
 as_con:
-| AS CONID                                                                          { mcon $2 $loc             }
+| AS CONID                                                                          { mcon $2            $loc }
 
 exposing:
 | EXPOSING LPAREN DOTDOT RPAREN                                                     { Module.Any              }
@@ -236,8 +236,8 @@ decl :
 | udecl                                                                             { $1 }
 
 udecl:
-| funlhs rhs                                                                        { node (Decl.Fun ($1, $2)) $loc   }
-| pat    rhs                                                                        { node (Decl.Pat ($1, $2)) $loc   }
+| funlhs rhs                                                                        { node (Decl.Fun ($1, $2))   $loc }
+| pat    rhs                                                                        { node (Decl.Pat ($1, $2))   $loc }
 
 gendecl :
 | var OF_TYPE type_                                                                 { node (Decl.Annot ($1, $3)) $loc }
@@ -261,21 +261,21 @@ type_ :
 
 // Type application
 btype:
-| btype atype                                                                       { node (Typ.TApp ($1, $2)) $loc  }
+| btype atype                                                                       { node (Typ.TApp ($1, $2))  $loc }
 | atype                                                                             { $1                             }
 
 // Elm does not have [TyCon] syntax for Lists, but it could be nice to have
 atype:
-| tvar                                                                              { node (Typ.TVar $1)       $loc  }
+| tvar                                                                              { node (Typ.TVar $1)        $loc }
 | gtycon                                                                            { $1                             }
-| LPAREN t=type_ COMMA ts=separated_nonempty_list(COMMA, type_) RPAREN              { node (Typ.Tuple (t::ts)) $loc  }
+| LPAREN t=type_ COMMA ts=separated_nonempty_list(COMMA, type_) RPAREN              { node (Typ.Tuple (t::ts))  $loc }
 | LKET type_ RKET                                                                   { assert false                   }
-| LBRACE row RBRACE                                                                 { node (Typ.Record $2)     $loc  }
+| LBRACE row RBRACE                                                                 { node (Typ.Record $2)      $loc }
 | LPAREN type_ RPAREN                                                               { $2                             }
 
 gtycon:
-| qtycon                                                                            { node (Typ.TyCon $1) $loc       }
-| LPAREN RPAREN                                                                     { node (Typ.Unit) $loc           }
+| qtycon                                                                            { node (Typ.TyCon $1)       $loc }
+| LPAREN RPAREN                                                                     { node (Typ.Unit)           $loc }
 /*
 | LKET RKET                                                                         { node (Typ.EmptyList)     $loc  }
 */
