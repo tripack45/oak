@@ -1,8 +1,8 @@
 let max_paren_depth = 6
 let code_len_args : Pass.WarnCodeLen.CodeLen.code_len_args = { 
-    m = (Pass.WarnCodeLen.Size(1000, 1000.), Pass.WarnCodeLen.Size(750, 750.)); 
-    func = (Pass.WarnCodeLen.Size(150, 150.), Pass.WarnCodeLen.Size(100, 100.)); 
-    lambda = (Pass.WarnCodeLen.Size(80, 80.), Pass.WarnCodeLen.Size(60, 60.)) 
+    m = ((1000, 1000.), (750, 750.)); 
+    func = ((150, 150.), (100, 100.)); 
+    lambda = ((80, 80.), (60, 60.)) 
   }
 
 module Driver = Oaklib.Driver

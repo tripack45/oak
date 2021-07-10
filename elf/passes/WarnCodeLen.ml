@@ -16,7 +16,14 @@
  *
  *)
 
+open Core
 open Oaklib
+
+let (>.) = Core.Float.(>.)
+
+module R = Util.PassResult.WarnList
+open R.Pervasive
+
 open ElAst.Syntax
 open ElAst.Node
 
@@ -55,10 +62,13 @@ type ctx    = BindingContext.t
  * - weighed length
  * a violation of either will produce a warning
  *)
-type size = Size of int * float
+type size = int * float
 
-let excceed (Size (p, w)) (Size (pl, wl)) =
-  p > pl || w > wl
+let excceed ((p, w)) ((pl, wl)) =
+  p > pl || w >. wl
+
+(* let r_excceed r1 r2 = r1 ** r2 >>| Tuple2.uncurry excceed *)
+
 
 (* The site deals with all "meaningful" data structure during this pass. *)
 type site = 
@@ -68,20 +78,28 @@ type site =
 
 type violation = Violation of (binder * pos) list * site * size
 
-type result = size * violation list
-
-let merge_result (Size (px, wx), vx) (Size (py, wy), vy) =
-  (Size(px + py, wx +. wy), vx @ vy)
-
-let bare s = (s, [])
+type result = (size, violation) R.t
 
 (* The "nullary" size, A.K.A. the "bottom" size *)
-let bot = bare @@ Size (0, 0.)
+let bot = (0, 0.)
 (* The "trival" size. *)
-let trival = bare @@ Size (1, 1.)
-let readable = bare @@ Size (1, 0.5)
+let trival = (1, 1.)
+let readable = (1, 0.5)
 
-let merge_results = Core.List.fold ~init:bot ~f:merge_result
+let merge_size ((px, wx)) ((py, wy)) =
+  (px + py, wx +. wy)
+
+let merge_sizes =
+  Core.List.fold ~init:bot ~f:merge_size
+
+let merge x y =
+  ok @@ merge_size x y
+
+let merge2 r1 r2 = r1 ** r2 >>= Tuple2.uncurry merge
+
+let (<*>) = merge2
+
+let merge_results r: result = R.Seq.fold ~init:(ok bot) ~f:merge r
 
 
 module CodeLen =
@@ -92,7 +110,7 @@ struct
     let len = name |> to_string |> String.length in
     let len_extra = len - base in 
     let penalty = if len_extra > 0 then Int.to_float len_extra else 0. in
-    bare @@ Size (1, 1. +. penalty *. rate)
+    ok (1, 1. +. penalty *. rate)
 
   (* var_size_weighed =
   *   len <= 24 -> 1
@@ -123,10 +141,10 @@ struct
 
   let lit_size lit' =
     match elem lit' with
-    | Int _      -> trival
-    | Float _    -> trival
+    | Int _      -> ok trival
+    | Float _    -> ok trival
     | String str -> let len = (str |> String.length |> Int.to_float) *. 0.1 in
-    bare @@ Size (Float.to_int len, len)
+    ok (Float.to_int len, len)
 
   let qvar_size qvar' = 
     let QVar(_, var') = elem qvar' in
@@ -142,38 +160,64 @@ struct
   let rec pat_size pat' =
     let pat: pat = elem pat' in
     match pat with
-    | Var       (var')           -> var_size var'
+    | Var var'     -> var_size var'
     | Any
-    | Unit                       -> trival
-    | EmptyList                  -> readable
-    | Literal   (lit')           -> lit_size lit'
-    | Cons      (pat', pat'')    -> merge_results @@ readable :: pat_size pat' :: pat_size pat'' :: []
-    | List      (pat's)          -> merge_results @@ readable :: (List.map pat_size pat's)
-    | Tuple     (pat's)          -> merge_results @@ readable :: (List.map pat_size pat's)
-    | Record    (fs)             -> merge_results @@ readable :: (List.map (fun (f, _) -> field_size (node f ())) fs)
-    | Con       (qdcon', pat's)  -> merge_results @@ qdcon_size qdcon' :: (List.map pat_size pat's)
+    | Unit         -> ok trival
+    | EmptyList    -> ok readable
+    | Literal lit' -> lit_size lit'
+    | Cons (pat', pat'') -> 
+      let* pat' = pat_size pat'
+      and* pat'' = pat_size pat'' in
+      merge_results [readable; pat'; pat'']
+    | List pat's
+    | Tuple pat's  -> 
+      let* pat's = R.Par.map ~f:pat_size pat's in
+      merge_results @@ readable :: pat's
+    | Record fs    -> 
+      let* fs = R.Par.map ~f:(fun (f, _) -> field_size (node f ())) fs in
+      merge_results @@ readable :: fs
+    | Con (qdcon', pat's) -> 
+      let* qdcon' = qdcon_size qdcon'
+      and* pat's = R.Par.map ~f:pat_size pat's in
+      merge_results @@ qdcon' :: pat's
 
   let rec typ_size typ' =
     let typ: typ = elem typ' in
     match typ with
     | TVar   (tvar')        -> tvar_size tvar'
-    | Unit                  -> readable
+    | Unit                  -> ok readable
     | TyCon  (qtcon')       -> qtycon_size qtcon'
-    | Arrow  (l, r)         -> merge_results @@ readable :: [typ_size l; typ_size r]
-    | TApp   (typ', typ'el) -> merge_results @@ bot      :: [typ_size typ'; typ_size typ'el]
-    | Record (row)          -> merge_results @@ readable :: [(row_size row)]
-    | Tuple  (typ's)        -> merge_results @@ readable :: List.map typ_size typ's
+    | Arrow  (l, r)         -> 
+      let* l = typ_size l
+      and* r = typ_size r in
+      merge_results @@ readable :: [l; r]
+    | TApp   (typ', typ'el) -> 
+      let* typ' = typ_size typ'
+      and* typ'el = typ_size typ'el in
+      merge_results @@ bot      :: [typ'; typ'el]
+    | Record (row)          -> 
+      let* row = row_size row in
+      merge_results @@ readable :: [row]
+    | Tuple  (typ's)        -> 
+      let* typ's = R.Par.map ~f:typ_size typ's in
+      merge_results @@ readable :: typ's
   
-  and row_size row =
-    let pair_size (field', typ') = merge_result (field_size field') (typ_size typ') in
+  and row_size row: result =
+    let pair_size (field', typ') = merge2 (field_size field') (typ_size typ') in
     match row with 
-    | RVar tvar' -> tvar_size tvar'
-    | Extension (row, pairs) -> merge_results @@ row_size row :: List.map pair_size pairs 
-    | Fields    pairs        -> merge_results @@ List.map pair_size pairs
+    | RVar tvar' -> 
+      tvar_size tvar'
+    | Extension (row, pairs) ->
+      let* row = row_size row
+      and* pairs = R.Par.map ~f:pair_size pairs in
+      merge_results @@ readable :: row :: pairs 
+    | Fields pairs -> 
+      let* pairs = R.Par.map ~f:pair_size pairs in
+      merge_results @@ pairs
 
   let op_size op = 
     match op with
-    _ -> trival
+    _ -> ok trival
 
   (* { x : limit * soft } 
    * limit is size's the lowest upper bound;
@@ -181,19 +225,20 @@ struct
    *)
   type code_len_args = { m : size * size; func : size * size; lambda : size * size }
   let code_len_args_default = { 
-    m = (Size (1000, 1000.0), Size (800, 800.0)); 
-    func = (Size (100, 100.0), Size (70, 70.0)); 
-    lambda = (Size (20, 20.0), Size (20, 20.0) )
+    m = ((1000, 1000.0), (800, 800.0)); 
+    func = ((100, 100.0), (70, 70.0)); 
+    lambda = ((20, 20.0), (20, 20.0) )
   }
 
   let run ?(args = code_len_args_default)
     (Mod (mdecl, _imports, decls)) : result =
 
-    let check ctx site (limit, soft) res : result =
-      let (s, vios) = res in
-      let vio = Violation (BindingContext.dump ctx, site, s) in
+    let check ctx site (limit, soft) size : result =
       (* if s is larger than limit, then count as soft for higher layer *)
-      if excceed s limit then (soft, vios @ [vio]) else res
+      if excceed size limit then
+        warn soft @@ Violation (BindingContext.dump ctx, site, size)
+      else
+        ok size
     in
 
     let check_m ctx size = 
@@ -206,66 +251,93 @@ struct
       check ctx (Lambda expr') args.lambda size
     in
 
-    let rec decl_size ctx decl' : result =
+    let rec decl_size ctx (decl': decl') : result =
       let (decl, pos) = both decl' in
       match decl with 
       (* Annotations wouldn't be counted *)
-      | Annot _ -> bot
-      | Port _ -> bot
+      | Annot _ -> ok bot
+      | Port _ ->  ok bot
       | TyCon ((tycon', tvar's), branches) -> 
-        let brance_size (dcon', typ') = merge_results @@ dcon_size dcon' :: (List.map typ_size typ') in
-        let var_ = merge_results @@ List.map tvar_size tvar's
-        and branch_ = merge_results @@ List.map brance_size branches
-        in merge_results [(tycon_size tycon'); var_; branch_]
+        let brance_size (dcon', typ') : result = 
+          let* dcon' = dcon_size dcon'
+          and* typ' = R.Par.map typ' ~f:typ_size
+          in
+          merge_results @@ dcon' :: typ'
+        in
+        let* tycon' = tycon_size tycon'
+        and* var_ = R.Par.map tvar's ~f:tvar_size
+        and* branch_ = R.Par.map branches ~f:brance_size
+        in merge_results @@ tycon' :: branch_ @ var_
       | Alias ((con', var's), typ') -> 
-        let var_ = merge_results @@ List.map tvar_size var's
-        in merge_results [(tycon_size con'); var_; typ_size typ']
+        let* con' = tycon_size con'
+        and* typ' = typ_size typ'
+        and* var_ = R.Par.map var's ~f:tvar_size in
+        merge_results @@ con' :: typ' :: var_
       | Pat (pat', expr') -> 
         let ctx' = BindingContext.add ctx (Val pat', pos) in
-        merge_results [pat_size pat'; expr_size ctx' expr']
+        let* pat' = pat_size pat'
+        and* expr' = expr_size ctx' expr' in
+        merge_results [pat'; expr']
       | Fun ((var', pat's), expr') -> 
         let ctx' = BindingContext.add ctx (Fun var', pos) in
-        let res = merge_results @@ var_size var' :: expr_size ctx' expr' :: List.map pat_size pat's in
+        let* var' = var_size var'
+        and* expr' = expr_size ctx' expr'
+        and* pat's = R.Par.map pat's ~f: pat_size in
+        let* res = merge_results @@ var' :: expr' :: pat's in
         check_func ctx decl' res
   
-    and expr_size ctx expr': result =
-      let siz = expr_size ctx in
+    and expr_size ctx (expr': expr'): result =
+      let siz e: result = expr_size ctx e in
       let (expr, (pos, _)) = both expr' in
       match expr with 
       (* Context altering cases *)
       | Case (e, branches) -> 
-        let branch_depth (pat, expr') = 
+        let branch_size (pat, expr') = 
           let ctx' = BindingContext.add ctx (Val pat, pos) in
-          expr_size ctx' expr'
-        in merge_results @@ (bare @@ Size(2, 0.)) :: siz e :: List.map branch_depth branches 
+          let* pat = pat_size pat
+          and* expr' = expr_size ctx' expr' in
+          merge_results [pat; expr']
+        in
+        let* e = siz e
+        and* branches = R.Par.map branches ~f:branch_size in
+        merge_results @@ (2, 0.) :: e :: branches 
       | Lambda (pat's, expr')      ->
         let ctx' = BindingContext.add ctx (Lam(expr'), pos) in
-        check_lambda ctx' expr' (merge_results @@ List.map pat_size pat's @ [expr_size ctx' expr'])
+        let siz = check_lambda ctx' expr' in
+        let* pat's = R.Par.map pat's ~f:pat_size
+        and* expr' = expr_size ctx' expr' in
+        let* res = merge_results @@ expr' :: pat's in
+        siz res
       | Let (decls, e)     -> 
         (* Context updates were folded inside decl_size *)
-        merge_results @@ siz e :: List.map (decl_size ctx) decls
+        let* e = siz e
+        and* decls = R.Par.map decls ~f:(decl_size ctx) in
+        merge_results @@ e :: decls
       (* Context preserving cases *)
-      | If (e0, (e1, e2))  -> merge_results [bare @@ Size(3, 4.); siz e0; siz e1; siz e2]
-      | App (e, es)        -> merge_results @@ siz e :: List.map siz es
-      | Infix (op, e0, e1) -> merge_results [op_size op; siz e0; siz e1]
-      | Unary (op, e)      -> merge_results [op_size op; siz e]
-      | Tuple es           -> merge_results @@ readable :: (List.map siz es)
-      | List es            -> merge_results @@ readable :: (List.map siz es)
-      | Record field_exprs -> merge_results @@ List.map (fun fe -> siz @@ snd fe) field_exprs
-      | Con (qdcon', es)   -> merge_results @@ qdcon_size qdcon' :: List.map siz es
+      | If (e0, (e1, e2))  -> ok (3, 4.) <*> siz e0 <*> siz e1 <*> siz e2
+      | App (e, es)        -> siz e <*> R.Par.map_then es ~fmap:siz ~fthen:merge_sizes
+      | Infix (op, e0, e1) -> op_size op <*> siz e0 <*> siz e1
+      | Unary (op, e)      -> op_size op <*> siz e
+      | Tuple es           -> ok readable <*> R.Par.map_then es ~fmap:siz ~fthen:merge_sizes
+      | List es            -> ok readable <*> R.Par.map_then es ~fmap:siz ~fthen:merge_sizes
+      | Record field_exprs -> R.Par.map_then field_exprs ~fmap:(fun fe -> siz @@ snd fe) ~fthen:merge_sizes
+      | Con (qdcon', es)   -> qdcon_size qdcon' <*> R.Par.map_then es ~fmap:siz ~fthen:merge_sizes
       | Var qvar'          -> qvar_size qvar'
       | Literal  lit'      -> lit_size lit'
-      | Unit               -> readable
+      | Unit               -> ok readable
       | OpFunc op          -> op_size op
   in
   let ctx = BindingContext.empty in
-  check_m ctx (merge_results @@ List.map (decl_size ctx) decls)
+  (* check_m ctx (merge_results @@ List.map (decl_size ctx) decls) *)
+  let* m_size = R.Par.map ~f:(decl_size ctx) decls in
+  let* m_size = merge_results m_size in
+  check_m ctx m_size
 end
 
 let run = CodeLen.run
 
-let dump_result src (Size (plain, weighed), violations) = 
-  let dump_entry (Violation (ctx, site, Size (plain, weighed)) : violation) =
+let dump_result src r = 
+  let dump_entry (Violation (ctx, site, (plain, weighed)) : violation) =
     let dump_binding (binder, pos) =
       let binder_str = 
         match binder with
@@ -280,7 +352,7 @@ let dump_result src (Size (plain, weighed), violations) =
     | Module Some mdecl ->
       let MDecl (path, _) = mdecl in
       let (_, pos) = both path in
-      List.iter dump_binding ctx;
+      List.iter ctx ~f:dump_binding;
       Printf.printf "Module <%s> (at %s) below excceeds a code length upper bound with\n    - plain length of %d;\n    - weighed length of %.2f.\n\n%s"
                     (ElAst.ToString.path_to_string path)
                     (ElAst.ToString.pos_to_string pos)
@@ -288,13 +360,13 @@ let dump_result src (Size (plain, weighed), violations) =
                     weighed
                     (Src.Source.lines src pos)
     | Module None ->
-      List.iter dump_binding ctx;
+      List.iter ctx ~f:dump_binding;
       Printf.printf "Module excceeds a code length upper bound with\n    - plain length of %d;\n    - weighed length of %.2f.\n"
                     plain 
                     weighed
     | Function decl' -> 
       let pos = attr decl' in
-      List.iter dump_binding ctx;
+      List.iter ctx ~f:dump_binding;
       Printf.printf "Function definition (at %s) below excceeds a code length upper bound with\n    - plain length of %d;\n    - weighed length of %.2f.\n\n%s"
                     (ElAst.ToString.pos_to_string pos)
                     plain 
@@ -302,19 +374,20 @@ let dump_result src (Size (plain, weighed), violations) =
                     (Src.Source.lines src pos)
     | Lambda expr ->
       let (pos, _) = attr expr in
-      List.iter dump_binding ctx;
+      List.iter ctx ~f:dump_binding;
       Printf.printf "Expression (at %s) below excceeds a code length upper bound with\n    - plain length of %d;\n    - weighed length of %.2f.\n\n%s"
                     (ElAst.ToString.pos_to_string pos)
                     plain 
                     weighed
                     (Src.Source.lines src pos)
   in
-  if List.length violations == 0 then
+  let ((plain, weighed), violations) = R.run r in
+  if List.length violations = 0 then
     Printf.printf "The module has\n    - plain length of %d;\n    - weighed length of %.2f.\n" 
       plain weighed
   else
     Core.List.iteri violations ~f:(
       fun idx entry ->
-        if idx != 0 then print_endline "" else ();
+        if not (idx = 0) then print_endline "" else ();
         dump_entry entry
     )
