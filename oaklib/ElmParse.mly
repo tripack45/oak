@@ -195,6 +195,7 @@ main:
 | elm_module EOF                                                                    { $1 }
 
 elm_module:
+| LDELIM module_decl RDELIM                                                         { Module.Mod (Some $2, [], []) }
 | LDELIM module_decl SEMI body RDELIM                                               { Module.Mod (Some $2, fst $4, snd $4) }
 | LDELIM body RDELIM                                                                { Module.Mod (None, fst $2, snd $2) }
 
