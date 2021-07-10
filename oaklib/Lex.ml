@@ -231,7 +231,6 @@ struct
       | (T.EOF, [])                        -> `Just (t, (Seq.empty, []))
       (* Algorithm L note #5. The condition should always satisfy since Elm does not support explicit layout *)
       | (_, m::ms)        when not (m = 0) -> `Choice ( (t, (ts, m::ms)), (rdelim, (seqt, ms)) )
-      (* | (Nil, m::ms)                 when not (m = 0) -> `Just (rdelim, (seqt, ms)) *)
       | _                                  -> raise (IndentationError "Indentation Error")
 end
 

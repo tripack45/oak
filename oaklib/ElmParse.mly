@@ -225,12 +225,30 @@ topdecl:
 | typdecl                                                                           { $1                      }
 | decl                                                                              { $1                      }
 
+
+// Normally the following rule would be sufficient and natural 
+// 
+//   | LDELIM separated_nonempty_list(SEMI, decl) RDELIM { $2 }
+//
+// Current design is a patch to align with Elm compiler's behavior of tolerating ill-indented
+// let-bindings such as
+// 
+//   let x = ... 
+//       in 
+//       let ... in ...
+//
+// Where the terminating "let" is placed at the same indentations of definitions. It is accomodated
+// by allowing an optional extra SEMI, and taking advantage of the RDELIM-inserting recovery mechanisms
+// already built-in to insert an extra "}" when the IN token is encountered.
 decls:
-| LDELIM separated_nonempty_list(SEMI, decl) RDELIM                                 { $2 }
+| LDELIM decl_list RDELIM                                                          { $2 }
+
+decl_list:
+| decl option(SEMI)                                                                { [$1]   }
+| decl SEMI decl_list                                                              { $1::$3 }
 
 // - Elm: Type annotations must directly precede expression 
 // - Elm: Top-level binding does not support bind to pattern but we are going to allow it
-// - Elm: Type annotations are not allowed in let bindings but we allow them here
 decl :
 | gendecl                                                                           { $1 }
 | udecl                                                                             { $1 }
