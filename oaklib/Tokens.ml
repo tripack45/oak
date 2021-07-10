@@ -22,7 +22,7 @@ type t =
   | LBRACE | RBRACE  (* {} *)
   | UNDERSCORE       (* _  *)
 
-(* infix right 0 (<|)   = apL
+ (* infix right 0 (<|)   = apL
   * infix left  0 (|>)   = apR
   * infix right 2 (||)   = or
   * infix right 3 (&&)   = and
@@ -69,11 +69,14 @@ type t =
   (* Comments *)
   | LCOMMENT   of (Lexing.position * Lexing.position, string) Core.Tuple2.t
   | BCOMMENT   of (Lexing.position * Lexing.position, string) Core.Tuple2.t
+  (* ProjFunc; Elm *)
+  | PROJ_FUNC  of string
+  | PROJECT    of string
   (* Identifiers *)
-  | VARID     of string
-  | CONID     of string
-  | QVARID    of string
-  | QCONID    of string
+  | VARID      of string
+  | CONID      of string
+  | QVARID     of string
+  | QCONID     of string
   (* Layout Sensitive Transformation *)
   | EOF                (* eof *)
   | LDELIM             (* {{  *)
@@ -141,6 +144,8 @@ let to_string tok=
 | STRCONST   s -> "\"" ^ s  ^ "\""
 | LCOMMENT (_, s) -> "--" ^ s ^ "\n"
 | BCOMMENT (_, s) -> "{-" ^ s ^ "-}"
+| PROJ_FUNC  s -> "PROJ_FUNC:" ^ s 
+| PROJECT    s -> "PROJECT:" ^ s 
 | VARID      s -> "Var:" ^ s 
 | CONID      s -> "Con:" ^ s
 | QVARID     s -> "QVar:" ^ s 
@@ -183,18 +188,18 @@ let to_parse_string tok =
 | RBRACE   -> "RBRACE"
 | LAMBDA   -> "LAMBDA"
 | UNDERSCORE -> "UNDERSCORE"
-| APL     -> "APL"
-| APR     -> "APR"
-| OR      -> "OR"
-| AND     -> "AND"
-| EQU     -> "EQU"
-| NE      -> "NE"
-| GT      -> "GT"
-| LT      -> "LT"
-| GEQ     -> "GEQ"
-| LEQ     -> "LEQ"
-| CONS    -> "CONS"
-| APPEND  -> "APPEND"
+| APL      -> "APL"
+| APR      -> "APR"
+| OR       -> "OR"
+| AND      -> "AND"
+| EQU      -> "EQU"
+| NE       -> "NE"
+| GT       -> "GT"
+| LT       -> "LT"
+| GEQ      -> "GEQ"
+| LEQ      -> "LEQ"
+| CONS     -> "CONS"
+| APPEND   -> "APPEND"
 (* Arithematics *)
 | PLUS     -> "PLUS"
 | MINUS    -> "MINUS"
@@ -207,8 +212,10 @@ let to_parse_string tok =
 | INTCONST   _ -> "INTCONST"
 | FLOATCONST _ -> "FLOATCONST"
 | STRCONST   _ -> "STRCONST"
-| LCOMMENT    _ -> "LCOMMENT"
-| BCOMMENT    _ -> "BCOMMENT"
+| LCOMMENT   _ -> "LCOMMENT"
+| BCOMMENT   _ -> "BCOMMENT"
+| PROJ_FUNC  _ -> "PROJ_FUNC"
+| PROJECT    _ -> "PROJECT"
 | VARID      _ -> "VARID"
 | CONID      _ -> "CONID"
 | QVARID     _ -> "QVARID"

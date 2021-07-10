@@ -80,7 +80,7 @@ struct
 
   (* EOF needs to be prodeced as an actual token because we need its 
     * position for the subsequent code to inser the closing scopes. *)
-  let t_of_lexbuf on_comment lexbuf : t = 
+  let elmlex_of_lexbuf on_comment lexbuf : t = 
     MakePersistent.seq_from (
       let eof_produced = ref false in
       let rec loop () = 
@@ -98,6 +98,33 @@ struct
           None
       in loop
     )
+  
+  let rec separate_project seq : t =
+    let sp = separate_project in
+    fun () ->
+      match seq () with 
+      | Nil             -> Seq.Nil
+      | Cons (tp, seq') -> 
+        match seq' () with
+        | Nil               -> Seq.Cons (tp, Seq.empty)
+        | Cons (tp', seq'') -> 
+          let ((_, e), (s', _)) = (snd tp, snd tp') in
+          let blank = s'.pos_cnum - e.pos_cnum = 1 in
+          match (fst tp, fst tp') with
+          | (T.RPAREN      , T.PROJ_FUNC field)
+          | (T.VARID _     , T.PROJ_FUNC field)
+          | (T.QVARID _    , T.PROJ_FUNC field)
+          | (T.RBRACE      , T.PROJ_FUNC field)
+          | (T.PROJECT _   , T.PROJ_FUNC field)
+          (* Make the behavior compliant with Elm compiler *)
+          | (T.PROJ_FUNC _ , T.PROJ_FUNC field) when not blank ->
+            Seq.Cons (tp, sp ((T.PROJECT field, snd tp') @:: seq''))
+          | _ ->
+            Seq.Cons (tp, sp seq')
+
+  let t_of_lexbuf on_comment lexbuf : t =
+    separate_project (elmlex_of_lexbuf on_comment lexbuf)
+    
 
   let tp_seq_of_t = Fun.id
 end
@@ -166,8 +193,9 @@ struct
         let col = snd (token_lc tp) in
         at_start_of tp (T.REQ_INDENT col) @:: kick raw
 
-    let t_of_lex_buf on_comment lexbuf =
+    let t_of_lexbuf on_comment lexbuf =
       annotate (Raw.t_of_lexbuf on_comment lexbuf)
+
     let tp_seq_of_t = Fun.id
 end
 

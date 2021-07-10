@@ -27,7 +27,8 @@ struct
   let id_tycon con    : exposing_ident = TyCon con
   let id_abstycon con : exposing_ident = AbsTyCon con
 
-  let field name pos : field' = node (FieldId.of_string name) pos
+  let field name pos  : field' = node (FieldId.of_string name) pos
+  
 
   let record_pat_field var's : (field * pat') list = 
     let f var' =
@@ -158,6 +159,9 @@ open Util
 %token <string>CONID
 %token <string>QVARID
 %token <string>QCONID
+
+%token <string>PROJ_FUNC
+%token <string>PROJECT
 (* Layout Sensitive Transformation *)
 %token LDELIM             (* {{  *)
 %token RDELIM             (* }}  *)
@@ -354,7 +358,8 @@ aexp :
 | LPAREN e = exp COMMA es =separated_nonempty_list(COMMA, exp) RPAREN               { expr (Expr.Tuple (e::es)) $loc }
 | LKET   es = separated_nonempty_list(COMMA, exp) RKET                              { expr (Expr.List es)       $loc }
 | LBRACE separated_list(COMMA, fbind) RBRACE                                        { expr (Expr.Record $2)     $loc }
-| aexp DOT fieldid                                                                  { expr (Expr.Project   ($1, $3)) $loc }
+| projfunc                                                                          { expr (Expr.ProjFunc ($1)) $loc }
+| aexp project                                                                      { expr (Expr.Project   ($1, $2)) $loc }
 | LBRACE exp BAR separated_nonempty_list(COMMA, fbind) RBRACE                       { expr (Expr.Extension ($2, $4)) $loc }
 
 /* Elm forbids uses of operator such a (+ 1) and (+ 2) but allows (+) */ 
@@ -445,6 +450,12 @@ tvar:
 
 fieldid:
 | VARID                                                                             { field $1 $loc }
+
+project:
+| PROJECT                                                                           { field $1 $loc }
+
+projfunc:
+| PROJ_FUNC                                                                         { field $1 $loc }
 
 var:
 | VARID                                                                             { var $1   $loc }

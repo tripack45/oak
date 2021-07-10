@@ -134,7 +134,8 @@ let run ?(max_depth=5) ?soft (Mod (_mdecl, _imports, decls)) : result =
       | Tuple es           -> R.Par.map_then es ~fmap:dep ~fthen:maxints
       | List es            -> R.Par.map_then es ~fmap:dep ~fthen:maxints
       | Record field_exprs -> R.Par.map_then field_exprs ~fmap:(fun fe -> dep @@ snd fe) ~fthen:maxints
-      | Project    (e, _)  -> dep e
+      | ProjFunc _         -> ok 0
+      | Project (e, _)     -> dep e
       | Extension  (e, fs) -> (dep e) <*> R.Par.map_then fs ~fmap:(fun fe -> dep @@ snd fe) ~fthen:maxints
       | Con (_, es)        -> R.Par.map_then es ~fmap:dep ~fthen:maxints
       | Var _ 

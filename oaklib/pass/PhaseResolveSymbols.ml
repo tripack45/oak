@@ -601,7 +601,8 @@ let rec translate_expr (ctx : Ctx.t) dicts (expr : P.expr') : R.expr' rslt =
       fun (field, e) -> let+ e' = tr e in (field, e')
     ) in
     ok' @@ R.Record fields'
-  | P.Project    (_e, _f)  -> failwith "Unimplemented Project   "
+  | P.ProjFunc _f          -> failwith "Unimplemented ProjFunc"
+  | P.Project (_e, _f)     -> failwith "Unimplemented Project"
   | P.Extension (_e, _fes) -> failwith "Unimplemented Extension"
   | P.Var v                -> let* v' = resolve_var dicts.vctx ctx.vctx v in ok' @@ R.Var v'
   | P.Con (qcon, es)       -> 

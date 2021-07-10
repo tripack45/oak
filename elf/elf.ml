@@ -119,7 +119,7 @@ let () =
           ElmModule.create_meta n x
       )
     |> List.map ElmModule.of_meta
-    |> List.map ElmModule.analysis_m
+    (* |> List.map ElmModule.analysis_m
     |> ElmModule.resolve_module_dependency
-    |> ElmModule.resolve_ast
+    |> ElmModule.resolve_ast *)
     |> ignore

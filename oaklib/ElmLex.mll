@@ -47,7 +47,7 @@ rule initial =
   | "->"        { T.ARROW }
   | ','         { T.COMMA }
   | '\\'        { T.LAMBDA }
-  | '.'         { T.DOT }
+  (* | '.'         { T.DOT } *)
   | '|'         { T.BAR   }
   | ":"         { T.OF_TYPE }
   | ".."        { T.DOTDOT }
@@ -94,6 +94,9 @@ rule initial =
   | floatnum as n             { T.FLOATCONST n }
   | "\"\"\"" strTri as s "\"\"\"" { T.STRCONST s }
   | "\"" str as s "\""            { T.STRCONST s }
+
+  (* PROJ_FUNC; PROJECT is only yielded from lexing optional path *)
+  | '.' (varid as f)          { T.PROJ_FUNC f }
 
   (* Spaces are not allowed in qualified names such as M.N.Cons or M.N.P *)
   | (modid '.' conid) as name { T.QCONID name }

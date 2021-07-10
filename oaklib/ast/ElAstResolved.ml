@@ -187,7 +187,8 @@ struct
     | Tuple      of expr' list  (* >= 2 elements *)
     | List       of expr' list  (* >= 0 elements *)
     | Record     of (field' * expr') list
-    | Project    of expr' * field' (* Record Access    *)
+    | ProjFunc   of field' (* .field *)
+    | Project    of expr' * field' (* Record Access *)
     | Extension  of expr' * (field' * expr') list 
     (* Data construction *)
     | Con        of dconref' * (expr' list)
@@ -304,6 +305,7 @@ struct
       | Tuple      of expr' list  (* >= 2 elements *)
       | List       of expr' list  (* >= 0 elements *)
       | Record     of (field' * expr') list
+      | ProjFunc   of field' (* .field *)
       | Project    of expr' * field' (* Record Access    *)
       | Extension  of expr' * (field' * expr') list 
       (* Data construction *)
@@ -545,6 +547,7 @@ struct
     | Unit               -> "()"
     | Tuple es           -> surround ("(", ")") @@ concat_map ", " pp es
     | List es            -> surround ("[", "]") @@ concat_map ", " pp es
+    | ProjFunc   f       -> sprintf "(.%s)" (field_to_string f)
     | Record field_es    -> 
       let record_field (f, e) = field_to_string f ^ " = " ^ pp e in
       surround ("<{", "}>") @@ (concat_map ";" record_field field_es)

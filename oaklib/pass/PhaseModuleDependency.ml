@@ -174,9 +174,10 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
           fun (fid, e) -> let+ e' = resolve_expr' e in (fid, e')
       ) in
       Record fields'
-    | Project    (e, f)    ->
+    | ProjFunc f           -> ok (ProjFunc f)
+    | Project (e, f)       ->
       let+ e' = resolve_expr' e in
-      Project    (e', f)
+      Project (e', f)
     | Extension (e, fes)   ->
       let+ e' = resolve_expr' e 
       and+ fes' = R.Par.map fes ~f:(
