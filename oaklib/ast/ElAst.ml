@@ -150,6 +150,7 @@ struct
   type lit = 
     | Int    of string
     | Float  of string
+    | Char   of string
     | String of string
   type lit' = lit node
 
@@ -305,6 +306,7 @@ struct
     type lit = Syntax.lit =
       | Int    of string
       | Float  of string
+      | Char   of string
       | String of string
 
     type lit' = Syntax.lit'
@@ -444,8 +446,9 @@ struct
 
   let lit_to_string lit = 
     match Node.elem lit with
-    | Int s    -> s
-    | Float s  -> s
+    | Int    s -> s
+    | Float  s -> s
+    | Char   s -> surround ("\'", "\'") s
     | String s -> surround ("\"", "\"") s
 
   let var_to_string v   = Node.fold_elem VarId.to_string v

@@ -15,6 +15,7 @@ let modid = (conid ".")* conid
 let decnum = ("0" | ['1'-'9'](['0'-'9']*))
 let floatnum = (['0'-'9']* '.'? ['0'-'9']+ (['e' 'E'] ['-' '+']? ['0'-'9']+)?)
 
+let char = (('\\' _) | [^'\''])
 let str = (('\\' _) | [^'\"'])*
 let strTri = (('\\' _) | [^'\"'] | '\"' [^'\"'] | '\"' '\"' [^'\"'])*
 
@@ -90,10 +91,11 @@ rule initial =
   | "{%"        { T.LDELIM    } 
   | "%}"        { T.RDELIM    } 
 
-  | decnum as n               { T.INTCONST n   }
-  | floatnum as n             { T.FLOATCONST n }
-  | "\"\"\"" strTri as s "\"\"\"" { T.STRCONST s }
-  | "\"" str as s "\""            { T.STRCONST s }
+  | decnum as n                   { T.INTCONST   n }
+  | floatnum as n                 { T.FLOATCONST n }
+  | "\'" char as c "\'"           { T.CHARCONST  c }
+  | "\"\"\"" strTri as s "\"\"\"" { T.STRCONST   s }
+  | "\"" str as s "\""            { T.STRCONST   s }
 
   (* PROJ_FUNC; PROJECT is only yielded from lexing optional path *)
   | '.' (varid as f)          { T.PROJ_FUNC f }

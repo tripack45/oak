@@ -65,6 +65,7 @@ type t =
   (* Literals *)
   | INTCONST   of string
   | FLOATCONST of string
+  | CHARCONST  of string
   | STRCONST   of string
   (* Comments *)
   | LCOMMENT   of (Lexing.position * Lexing.position, string) Core.Tuple2.t
@@ -141,7 +142,8 @@ let to_string tok=
 | COMPOSER -> ">>"
 | INTCONST   s -> s ^ "_d"
 | FLOATCONST s -> s ^ "_f"
-| STRCONST   s -> "\"" ^ s  ^ "\""
+| CHARCONST  s -> "\'" ^ s ^ "\'"
+| STRCONST   s -> "\"" ^ s ^ "\""
 | LCOMMENT (_, s) -> "--" ^ s ^ "\n"
 | BCOMMENT (_, s) -> "{-" ^ s ^ "-}"
 | PROJ_FUNC  s -> "PROJ_FUNC:" ^ s 
@@ -211,6 +213,7 @@ let to_parse_string tok =
 | COMPOSER -> "COMPOSER"
 | INTCONST   _ -> "INTCONST"
 | FLOATCONST _ -> "FLOATCONST"
+| CHARCONST  _ -> "CHARCONST"
 | STRCONST   _ -> "STRCONST"
 | LCOMMENT   _ -> "LCOMMENT"
 | BCOMMENT   _ -> "BCOMMENT"

@@ -59,6 +59,7 @@ struct
     type lit = ElAst.Syntax.lit =
       | Int    of string
       | Float  of string
+      | Char   of string
       | String of string
     type lit' = lit node
 
@@ -197,6 +198,7 @@ struct
     type lit = Syntax.lit =
       | Int    of string
       | Float  of string
+      | Char   of string
       | String of string
 
     type lit' = Syntax.lit'

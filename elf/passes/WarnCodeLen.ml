@@ -143,6 +143,7 @@ struct
     match elem lit' with
     | Int _      -> ok trival
     | Float _    -> ok trival
+    | Char _     -> ok trival
     | String str -> let len = (str |> String.length |> Int.to_float) *. 0.1 in
     ok (Float.to_int len, len)
 

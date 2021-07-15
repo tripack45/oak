@@ -153,6 +153,7 @@ open Util
      
 %token <string>INTCONST 
 %token <string>FLOATCONST
+%token <string>CHARCONST
 %token <string>STRCONST
 
 %token <string>VARID
@@ -495,8 +496,9 @@ qdcon:
 
 // literals
 literal:
-| INTCONST                                                                          { node (Literal.Int $1)    $loc }
-| FLOATCONST                                                                        { node (Literal.Float $1)  $loc }
+| INTCONST                                                                          { node (Literal.Int    $1) $loc }
+| FLOATCONST                                                                        { node (Literal.Float  $1) $loc }
+| CHARCONST                                                                         { node (Literal.Char   $1) $loc }
 | STRCONST                                                                          { node (Literal.String $1) $loc }
 
 modid:
