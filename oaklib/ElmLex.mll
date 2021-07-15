@@ -93,11 +93,11 @@ rule initial =
   | "{%"        { T.LDELIM    } 
   | "%}"        { T.RDELIM    } 
 
-  | intnum as n                   { T.INTCONST   n }
-  | floatnum as n                 { T.FLOATCONST n }
-  | "\'" char as c "\'"           { T.CHARCONST  c }
-  | "\"\"\"" strTri as s "\"\"\"" { T.STRCONST   s }
-  | "\"" str as s "\""            { T.STRCONST   s }
+  | intnum as n                     { T.INTCONST   n }
+  | floatnum as n                   { T.FLOATCONST n }
+  | "\'" (char as c) "\'"           { T.CHARCONST  c }
+  | "\"\"\"" (strTri as s) "\"\"\"" { T.STRCONST   s }
+  | "\"" (str as s) "\""            { T.STRCONST   s }
 
   (* PROJ_FUNC; PROJECT is only yielded from lexing optional path *)
   | '.' (varid as f)          { T.PROJ_FUNC f }

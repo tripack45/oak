@@ -1,7 +1,8 @@
 module Example exposing (..)
 
 rec = 
-    { name = "mn"
+    { name = """mn
+awesome"""
     , game = "Hades"
     }
 
