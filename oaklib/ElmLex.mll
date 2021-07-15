@@ -13,6 +13,8 @@ let varid = ['a'-'z' '_']['A'-'Z' 'a'-'z' '0'-'9' '_']*
 let conid = ['A'-'Z']['A'-'Z' 'a'-'z' '0'-'9' '_']*
 let modid = (conid ".")* conid
 let decnum = ("0" | ['1'-'9'](['0'-'9']*))
+let hexnum = "0x" ("0" | ['1'-'9' 'A'-'F' 'a'-'f'](['0'-'9' 'A'-'F' 'a'-'f']*))
+let intnum = decnum | hexnum
 let floatnum = (['0'-'9']* '.'? ['0'-'9']+ (['e' 'E'] ['-' '+']? ['0'-'9']+)?)
 
 let char = (('\\' _) | [^'\''])
@@ -91,7 +93,7 @@ rule initial =
   | "{%"        { T.LDELIM    } 
   | "%}"        { T.RDELIM    } 
 
-  | decnum as n                   { T.INTCONST   n }
+  | intnum as n                   { T.INTCONST   n }
   | floatnum as n                 { T.FLOATCONST n }
   | "\'" char as c "\'"           { T.CHARCONST  c }
   | "\"\"\"" strTri as s "\"\"\"" { T.STRCONST   s }
