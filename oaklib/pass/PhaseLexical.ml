@@ -539,57 +539,70 @@ let run (mods : (E.path * E.m) list) =
       )
     end
     
-let dump_errors src errors = 
+let dump_errors cot errors = 
   let open ElAstLexical in
+  let open OTarget in
   let dump_entry err =
-    match err with 
-    | RepeatedBinder (pat, var) ->
-      printf "Variable '%s' binded more than once in pattern '%s'.\n%s\n\n" 
-        (VarId.to_string var) 
-        (ElAst.ToString.pat_to_string pat)
-        (Src.Source.lines src (Node.attr pat))
-    | VarIdRedefined (var_new, var_old) ->
-      printf "Variable '%s' redefined at '%s':\n%s\nPrevious at %s:\n%s\n\n"
-        (ToString.var_to_string var_new) 
-        (ToString.pos_to_string (Node.attr var_new))
-        (Src.Source.lines src (Node.attr var_new))
-        (ToString.pos_to_string (Node.attr var_old))
-        (Src.Source.lines src (Node.attr var_old))
-    | TyConIdRedefined (tycon_new, tycon_old) ->
-      printf "TyCon '%s' redefined at '%s':\n%s\nPrevious at %s:\n%s\n\n"
-        (ToString.tycon_to_string tycon_new) 
-        (ToString.pos_to_string (Node.attr tycon_new))
-        (Src.Source.lines src (Node.attr tycon_new))
-        (ToString.pos_to_string (Node.attr tycon_old))
-        (Src.Source.lines src (Node.attr tycon_old))
-    | DConIdRedefined ((dcon, tycon_new), tycon_old) ->
-      printf "Data constructor '%s' redefined in type '%s' at %s:\n%s\nPrevious in TyCon '%s' at %s:\n%s\n\n"
-        (ToString.dcon_to_string dcon) 
-        (ToString.tycon_to_string tycon_new)
-        (ToString.pos_to_string (Node.attr tycon_new))
-        (Src.Source.lines src (Node.attr tycon_new))
-        (ToString.tycon_to_string tycon_old)
-        (ToString.pos_to_string (Node.attr tycon_old))
-        (Src.Source.lines src (Node.attr tycon_old))
-    | RepeatedAnnotation ((var_old, _), (var_new, _)) ->
-      printf "Variable '%s' associated with more than one annoations. First annotation at %s:\n%s\nThen at %s:\n%s\n\n" 
-        (ToString.var_to_string var_old)
-        (ToString.pos_to_string (Node.attr var_new))
-        (Src.Source.lines src (Node.attr var_new))
-        (ToString.pos_to_string (Node.attr var_old))
-        (Src.Source.lines src (Node.attr var_old))
-    | DanglingTypeAnnotation (var, _) ->
-      printf "Type annotation of variable '%s' at '%s' does not have an associated definition:\n%s\n\n"
-        (ToString.var_to_string var)
-        (ToString.pos_to_string (Node.attr var))
-        (Src.Source.lines src (Node.attr var))
-    | RepeatedPortAnnotation (var, var_annot) -> 
-      printf "Port variable '%s' explicitly annoated. Defined at %s:\n%s\nAnnotated at %s:\n%s\n\n"
-        (ToString.var_to_string var)
-        (ToString.pos_to_string (Node.attr var))
-        (Src.Source.lines src (Node.attr var))
-        (ToString.pos_to_string (Node.attr var_annot))
-        (Src.Source.lines src (Node.attr var_annot))
+    match cot with 
+    | DirectSourced.O ot -> 
+      let printf format = DirectSourced.eprintf ot format in
+      let print_src = DirectSourced.wprint_src ot in 
+      begin
+        match err with 
+        | RepeatedBinder (pat, var) ->
+          printf (format_of_string "Variable '%s' binded more than once in pattern '%s'.\n")
+            (VarId.to_string var) 
+            (ElAst.ToString.pat_to_string pat);
+          print_src (Node.attr pat)
+        | VarIdRedefined (var_new, var_old) ->
+          printf "Variable '%s' redefined at '%s':\n"
+            (ToString.var_to_string var_new) 
+            (ToString.pos_to_string (Node.attr var_new));
+          print_src (Node.attr var_new);
+          printf "Previous at %s:\n"
+            (ToString.pos_to_string (Node.attr var_old));
+          print_src (Node.attr var_old)
+        | TyConIdRedefined (tycon_new, tycon_old) ->
+          printf "TyCon '%s' redefined at '%s':\n"
+            (ToString.tycon_to_string tycon_new) 
+            (ToString.pos_to_string (Node.attr tycon_new));
+          print_src (Node.attr tycon_new);
+          printf "Previous at %s:\n"
+            (ToString.pos_to_string (Node.attr tycon_old));
+          print_src (Node.attr tycon_old);
+        | DConIdRedefined ((dcon, tycon_new), tycon_old) ->
+          printf "Data constructor '%s' redefined in type '%s' at %s:\n" 
+            (ToString.dcon_to_string dcon) 
+            (ToString.tycon_to_string tycon_new)
+            (ToString.pos_to_string (Node.attr tycon_new));
+          print_src (Node.attr tycon_new);
+          printf "Previous in TyCon '%s' at %s:\n"
+            (ToString.tycon_to_string tycon_old)
+            (ToString.pos_to_string (Node.attr tycon_old));
+          print_src (Node.attr tycon_old)
+        | RepeatedAnnotation ((var_old, _), (var_new, _)) ->
+          printf "Variable '%s' associated with more than one annoations. First annotation at %s:\n" 
+            (ToString.var_to_string var_old)
+            (ToString.pos_to_string (Node.attr var_new));
+          print_src (Node.attr var_new);
+          printf "Then at %s:\n" 
+            (ToString.pos_to_string (Node.attr var_old));
+          print_src (Node.attr var_old);
+        | DanglingTypeAnnotation (var, _) ->
+          printf "Type annotation of variable '%s' at '%s' does not have an associated definition:\n"
+            (ToString.var_to_string var)
+            (ToString.pos_to_string (Node.attr var));
+          print_src (Node.attr var)
+        | RepeatedPortAnnotation (var, var_annot) -> 
+          printf "Port variable '%s' explicitly annoated. Defined at %s:\n"
+            (ToString.var_to_string var)
+            (ToString.pos_to_string (Node.attr var));
+          print_src (Node.attr var);
+          printf "Annotated at %s:\n"
+            (ToString.pos_to_string (Node.attr var_annot));
+          print_src (Node.attr var_annot)
+      end
+    | _ -> ()
   in
   List.iteri errors ~f:(
     fun _idx entry -> dump_entry entry

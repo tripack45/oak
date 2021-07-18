@@ -72,10 +72,11 @@ let parse_src src =
 
 (* This function formats Elm program string and formats it so that it introduces 
  * some layout and identations that reflects program structure. *)
-let dump_with_layout ?(inc=4) elm_str = 
+let dump_with_layout ?(inc=4) ?chn elm_str = 
   let t = Stream.of_string elm_str in
-  let outs  = Core.Out_channel.output_string stdout in
-  let outch = Core.Out_channel.output_char stdout in
+  let chn = Option.value chn ~default:stdout in
+  let outs  = Core.Out_channel.output_string chn in
+  let outch = Core.Out_channel.output_char chn in
   let out_indent indent = 
     if max indent 0 != 0 then
       Printf.sprintf "%*s" (max indent 0) " " |> outs

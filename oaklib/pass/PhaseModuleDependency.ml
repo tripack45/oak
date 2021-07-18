@@ -293,39 +293,54 @@ let run (mods : (Path.t * m) list) =
       topsort ~ignore_undefined:true path_expanded_mods 
     end
   
-let dump_errors src errors = 
+let dump_errors cot errors = 
+  let open OTarget in
   let dump_entry err =
-    match err with 
-    | UndefinedModReference path' -> 
-      printf "Module %s referenced at %s has not been imported.\n%s\n\n"
-        (ToString.path_to_string path')
-        (ToString.pos_to_string (Node.attr path'))
-        (Src.Source.lines src (Node.attr path'))
-    | ModAliasCollision ((path', mcon'), path) ->
-      printf "Unable to alias module %s as %s at %s. Alias already used for %s.\n%s\n\n"
-        (ToString.path_to_string path')
-        (ToString.mcon_to_string mcon')
-        (ToString.pos_to_string (Node.attr path'))
-        (ToString.path_to_string (Node.node path (Lexing.dummy_pos, Lexing.dummy_pos)))
-        (Src.Source.lines src (Node.attr path'))
-    | DuplicatedImport path' ->
-      printf "Module %s at %s has been imported earlier.\n%s\n\n"
-        (ToString.path_to_string path')
-        (ToString.pos_to_string (Node.attr path'))
-        (Src.Source.lines src (Node.attr path'))
-    | CyclicModuleDependency ->
-      printf "Module dependency is cyclic.\n"
+    match cot with 
+    | DirectSourced.O ot ->
+      let printf format = DirectSourced.eprintf ot format in
+      let print_src = DirectSourced.eprint_src ot in
+      begin
+        match err with 
+        | UndefinedModReference path' -> 
+          printf "Module %s referenced at %s has not been imported.\n"
+            (ToString.path_to_string path')
+            (ToString.pos_to_string (Node.attr path'));
+          print_src (Node.attr path')
+        | ModAliasCollision ((path', mcon'), path) ->
+          printf "Unable to alias module %s as %s at %s. Alias already used for %s.\n"
+            (ToString.path_to_string path')
+            (ToString.mcon_to_string mcon')
+            (ToString.pos_to_string (Node.attr path'))
+            (ToString.path_to_string (Node.node path (Lexing.dummy_pos, Lexing.dummy_pos)));
+          print_src (Node.attr path')
+        | DuplicatedImport path' ->
+          printf "Module %s at %s has been imported earlier.\n"
+            (ToString.path_to_string path')
+            (ToString.pos_to_string (Node.attr path'));
+          print_src (Node.attr path')
+        | CyclicModuleDependency ->
+          printf "Module dependency is cyclic.\n"
+      end
+    | _ -> ()
   in
   List.iteri errors ~f:(
     fun _idx entry -> dump_entry entry
   )
 
-let dump_warnings _src warns =
-  let dump_warn = function
-    | UndefinedModuleReference (path, path') ->
-      printf "Module %s depends on undefined module %s.\n" 
-        (Path.to_string path)
-        (Path.to_string path')
+let dump_warnings cot warns =
+  let dump_warn = 
+    match cot with 
+    | OTarget.DirectSourced.O o ->
+      let printf format = OTarget.DirectSourced.wprintf o format in
+      begin
+        function
+        | UndefinedModuleReference (path, path') ->
+          printf "Module %s depends on undefined module %s.\n" 
+            (Path.to_string path)
+            (Path.to_string path')
+      end
+    | _ -> fun _ -> ()
   in
   List.iteri warns ~f:(
     fun _idx entry -> dump_warn entry

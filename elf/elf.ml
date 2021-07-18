@@ -75,7 +75,7 @@ end = struct
   let resolve_module_dependency (modules: t list) =
     let () = Driver.print_title "Phase" "ResolveModuleDependency" in
     let mods = modules |> Core.List.map ~f:(fun {meta; m; _} -> (meta.name, m)) in
-    let open OakPass.PhaseResolveModuleDependency in
+    let open Oaklib.PhaseModuleDependency in
     let mods = match run mods with
     | R.Ok (v, _) -> v
     | R.Error (_errors, _warns) -> 
@@ -89,7 +89,7 @@ end = struct
     
   let resolve_ast mods =
     let () = Driver.print_title "Phase" "ResolveSymbols" in
-    let open OakPass.PhaseResolveSymbols in
+    let open Oaklib.PhaseResolveSymbols in
     let mods = match run mods with
     | Rst.Ok (v, _w) -> v
     | Rst.Error (_e, _ws) -> assert false
