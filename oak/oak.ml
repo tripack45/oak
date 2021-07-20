@@ -1,15 +1,16 @@
+let opts = Argv.parse ()
 
 open Oaklib
-let src = Src.Source.of_stdin ()
-
-module M = Core.Int.Map
 
 let to_path str = ElAst.Path.Just (ElAst.MConId.of_string str)
 
 let mods = 
-  [
-    (to_path "Stdin", src);
-  ]
+  if opts.stdin then 
+    [
+      (to_path "Stdin", Src.Source.of_stdin ());
+    ]
+  else
+    failwith "Only -stdin supported"
 
 open Passman.Syntax
 
@@ -38,4 +39,4 @@ let pipeline =
   )
 
 let _ = 
-  Passman.exec (module OTarget.DirectSourced) src mods pipeline
+  Passman.exec (module OTarget.DirectSourced) (List.hd mods |> snd) mods pipeline
