@@ -41,3 +41,6 @@ elm-stuff/
 /dirty/**/*.css
 /dirty/**/*.md
 /dirty/**/*.txt
+
+# vscode
+.vscode
