@@ -160,6 +160,7 @@ struct
     | Unit 
     | EmptyList
     | Literal    of lit'
+    | Alias      of pat node * var'
     | Cons       of pat node * pat node
     | List       of pat node list
     | Tuple      of pat node list
@@ -261,6 +262,7 @@ struct
     | Literal _           -> []
     | Var (_, None)       -> []
     | Var (_, Some annot) -> [annot]
+    | Alias (_p, _)       -> failwith "Unimplemented: Pattern Alias Annotation"
     | Cons (p, pn)        -> annots_in_pat p @ annots_in_pat pn
     | List pats           -> Core.List.concat_map pats ~f:annots_in_pat
     | Tuple pats          -> Core.List.concat_map pats ~f:annots_in_pat
@@ -280,6 +282,7 @@ struct
       | Unit 
       | EmptyList
       | Literal    of lit'
+      | Alias      of pat' * var'
       | Cons       of pat' * pat'
       | List       of pat' list
       | Tuple      of pat' list
@@ -490,6 +493,7 @@ struct
     | Unit         -> "()"
     | EmptyList    -> "[]"
     | Literal lit  -> lit_to_string lit
+    | Alias (p, v) -> pat_to_string p ^ " as " ^ var_to_string v
     | Cons (p, pn) -> pat_to_string p ^ " :: " ^ pat_to_string pn
     | List pats    -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
     | Tuple pats   -> surround ("(", ")") @@ concat_map ", " pat_to_string pats

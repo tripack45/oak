@@ -362,6 +362,7 @@ let collect_binders (pat : P.pat') : R.varid' list rslt =
     | P.Unit 
     | P.EmptyList 
     | P.Literal _     -> ok acc
+    | P.Alias (_, _)  -> failwith "Unimplemented: pat alias resolve"
     | P.Cons (p, pn)  -> Rst.Seq.fold [p; pn] ~init:(ok acc) ~f
     | P.List pats     -> Rst.Seq.fold pats ~init:(ok acc) ~f
     | P.Tuple pats    -> Rst.Seq.fold pats ~init:(ok acc) ~f
@@ -476,6 +477,12 @@ let ftv_in_pat annots pat =
     | P.Unit 
     | P.EmptyList 
     | P.Literal _     -> []
+    | P.Alias (p, v)  -> List.concat_map [p] ~f:r @ 
+      begin
+        match Map.find annots (Node.elem v) with
+        | None -> []
+        | Some (_, typ) -> ftv_in_typ typ
+      end
     | P.Cons (p, pn)  -> List.concat_map [p; pn] ~f:r
     | P.List pats     -> List.concat_map pats ~f:r
     | P.Tuple pats    -> List.concat_map pats ~f:r
@@ -498,11 +505,12 @@ let rec translate_pat (amap : amap) (ctx : Ctx.t) dicts (pat : P.pat') =
   | P.Unit         -> ok' A.Pat.Unit
   | P.EmptyList    -> ok' R.EmptyList
   | P.Literal lit  -> ok' @@ A.Pat.Literal lit
+  | P.Alias (_, _) -> failwith "Unimplemented: pat alias resolve"
   | P.Cons (p, pn) -> let* (p', pn') = tr p ** tr pn in ok' @@ A.Pat.Cons (p', pn') 
   | P.List pats    -> let* pats' = trs pats in ok' @@ A.Pat.List pats' 
   | P.Tuple pats   -> let* pats' = trs pats in ok' @@ A.Pat.Tuple pats'
-  | P.Record _    -> failwith "Unimplemented: record pat resolve"
-  | P.Var v       -> 
+  | P.Record _     -> failwith "Unimplemented: record pat resolve"
+  | P.Var v        -> 
     let* twin = lookup_binder ctx.vctx v in (
       match Map.find amap (Node.elem v) with
       | None -> ok' @@ A.Pat.Var (twin, None)

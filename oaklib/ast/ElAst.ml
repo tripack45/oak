@@ -176,6 +176,7 @@ struct
     | Unit 
     | EmptyList
     | Literal    of lit'
+    | Alias      of (pat node) * (var')
     | Cons       of (pat node) * (pat node)
     | List       of (pat node) list
     | Tuple      of (pat node) list
@@ -320,6 +321,7 @@ struct
       | Unit 
       | EmptyList
       | Literal    of lit'
+      | Alias      of pat' * var'
       | Cons       of pat' * pat'
       | List       of pat' list
       | Tuple      of pat' list
@@ -558,6 +560,7 @@ struct
     | Unit          -> "()"
     | EmptyList     -> "[]"
     | Literal lit   -> lit_to_string lit
+    | Alias (p, v)  -> pat_to_string p ^ " as " ^ var_to_string v
     | Cons (p1, p2) -> pat_to_string p1 ^ " :: " ^ pat_to_string p2
     | List pats     -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
     | Tuple pats    -> surround ("(", ")") @@ concat_map ", " pat_to_string pats

@@ -166,6 +166,10 @@ struct
     | Unit         -> ok trival
     | EmptyList    -> ok readable
     | Literal lit' -> lit_size lit'
+    | Alias (pat', var') -> 
+      let* pat = pat_size pat'
+      and* var = var_size var' in
+      merge_results [ readable; pat; var; ]
     | Cons (pat', pat'') -> 
       let* pat' = pat_size pat'
       and* pat'' = pat_size pat'' in

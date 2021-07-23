@@ -199,6 +199,7 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
     | EmptyList  
     | Literal _ 
     | Var _ -> ok pat
+    | Alias (_, _) -> failwith "Unimplemented: pat alias resolve"
     | Cons (p, pn) -> let+ (p', pn') = resolve_pat' p ** resolve_pat' pn 
                       in Alias.Pattern.Cons (p', pn')
     | List pats    -> let+ pats' = resolve_pats' pats in Alias.Pattern.List pats'
