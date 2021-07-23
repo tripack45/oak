@@ -6,9 +6,9 @@ type cot = ..
 module type OUTPUT_TARGET =
 sig 
   type t 
-  type cot += O of t
-  val dump  : t -> string -> unit
-  val debug : t -> string -> unit
+  val as_cot : t -> cot
+  val dump   : t -> string -> unit
+  val debug  : t -> string -> unit
 end
 
 (* A compilation pipeline compiling takes 'a to 'b, much like a function *)

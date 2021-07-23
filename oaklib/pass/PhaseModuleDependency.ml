@@ -297,7 +297,7 @@ let dump_errors cot errors =
   let open OTarget in
   let dump_entry err =
     match cot with 
-    | DirectSourced.O ot ->
+    | DirectSourced.DirectSourced ot ->
       let printf format = DirectSourced.eprintf ot format in
       let print_src = DirectSourced.eprint_src ot in
       begin
@@ -331,7 +331,7 @@ let dump_errors cot errors =
 let dump_warnings cot warns =
   let dump_warn = 
     match cot with 
-    | OTarget.DirectSourced.O o ->
+    | OTarget.DirectSourced.DirectSourced o ->
       let printf format = OTarget.DirectSourced.wprintf o format in
       begin
         function

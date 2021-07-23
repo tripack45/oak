@@ -6,29 +6,23 @@ type cot = ..
 module type OUTPUT_TARGET =
 sig 
   type t 
-  type cot += O of t
-  val dump  : t -> string -> unit
-  val debug : t -> string -> unit
+  val as_cot : t -> cot 
+  val dump   : t -> string -> unit
+  val debug  : t -> string -> unit
+end
+
+module type PACKAGED =
+sig
+  include OUTPUT_TARGET
+  val ot : t
 end
 
 type state = 
 {
-  out_m : (module OUTPUT_TARGET);
-  (* This should ideally be out_m.t but that would require depdent products *)
-  out   : cot; 
+  out_m : (module PACKAGED);
   (* the function to dump the current representation of the program *)
   dump  : (unit -> string) option;
 }
-
-
-module Formatter (M : OUTPUT_TARGET) =
-struct
-  let get out = 
-    match out with 
-    | M.O v -> v
-    | _ -> assert false
-end
-
 
 type ('a, 'b) pipeline = state -> 'a -> 'b option * state
 
@@ -60,8 +54,8 @@ let error : ('a, 'b) pipeline =
 
 let pass (pass : ('a, 'b) pass) : ('a, 'b) pipeline = 
   fun s a -> 
-    let module Out = (val s.out_m : OUTPUT_TARGET) in
-    let r_opt = pass.func s.out a in
+    let module Out = (val s.out_m : PACKAGED) in
+    let r_opt = pass.func (Out.as_cot Out.ot) a in
     let s' = 
     {
       s with
@@ -74,16 +68,14 @@ let opt_pass = pass
 
 let analysis (pass : 'a analysis) : ('a, 'a) pipeline = 
   fun s a -> 
-    let module Out = (val s.out_m : OUTPUT_TARGET) in
-    pass.func s.out a;
+    let module Out = (val s.out_m : PACKAGED) in
+    pass.func (Out.as_cot Out.ot) a;
     (Some a, s)
 
 let log str : ('a, 'a) pipeline = 
   fun s a -> 
-    let module Out = (val s.out_m : OUTPUT_TARGET) in
-    let module Get = Formatter(Out) in
-    let out = Get.get s.out in
-    Out.debug out str;
+    let module Out = (val s.out_m : PACKAGED) in
+    Out.debug Out.ot str;
     (Some a, s)
 
 let tracepoint _str : ('a, 'a) pipeline = 
@@ -92,10 +84,8 @@ let tracepoint _str : ('a, 'a) pipeline =
 
 let dump : ('a, 'a) pipeline = 
   fun s a -> 
-    let module Out = (val s.out_m : OUTPUT_TARGET) in
-    let module Get = Formatter(Out) in
-    let out = Get.get s.out in
-    Option.iter s.dump ~f:(fun fdump -> Out.dump out (fdump ()));
+    let module Out = (val s.out_m : PACKAGED) in
+    Option.iter s.dump ~f:(fun fdump -> Out.dump Out.ot (fdump ()));
     (Some a, s)
 
 let ignore (p : ('a, 'b) pipeline) :  ('a, 'a) pipeline = 
@@ -111,13 +101,17 @@ let andThen (p1, p2) : ('a, 'b) pipeline =
     | Some x' -> 
       p2 s' x'
 
-let exec (type out) (m : (module OUTPUT_TARGET with type t = out)) init a (pipe : ('a, 'b) pipeline) =
+let exec (type out) m (init : out) a   (pipe : ('a, 'b) pipeline) =
   let module Out = (val m : OUTPUT_TARGET with type t = out) in
-  let module Get = Formatter(Out) in
+  let module Packaged = 
+    struct
+      include Out
+      let ot = init
+    end
+  in
   let s : state =
     {
-      out_m = (module Out : OUTPUT_TARGET);
-      out   = Out.O init;
+      out_m = (module Packaged : PACKAGED);
       dump  = None;
     }
   in

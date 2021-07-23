@@ -7,8 +7,11 @@ module type DIRECT_WRITE =
 sig
   type t
 
+  type Passman.cot += DirectWrite of t
+
   include Passman.OUTPUT_TARGET with type t := t
 
+  val as_cot  : t -> Passman.cot
   val printf  : t -> ('a, Out_channel.t, unit) format -> 'a
   val eprintf : t -> ('a, Out_channel.t, unit) format -> 'a
   val wprintf : t -> ('a, Out_channel.t, unit) format -> 'a
@@ -18,8 +21,9 @@ module Direct : DIRECT_WRITE with type t = unit =
 struct
   type t = unit
 
-  type Passman.cot += O of t
+  type Passman.cot += DirectWrite of t
 
+  let as_cot () = DirectWrite ()
   let eprintf () format = Printf.eprintf format
   let wprintf () format = Printf.eprintf format
   let printf  () format = Printf.eprintf format
@@ -29,18 +33,13 @@ struct
   let print () str = printf () "%s" str 
 end
 
-module DirectSourced : 
-sig
-  include DIRECT_WRITE with type t = Src.Source.t 
-
-  val wprint_src : t -> Lexing.position * Lexing.position -> unit
-  val eprint_src : t -> Lexing.position * Lexing.position -> unit
-end = 
+module DirectSourced =
 struct
   type t = Src.Source.t
 
-  type Passman.cot += O of t
+  type Passman.cot += DirectSourced of t
 
+  let as_cot x = DirectSourced x
   let eprintf _t format = Printf.eprintf ("Error: " ^^ format)
   let wprintf _t format = Printf.eprintf ("Warning: " ^^ format)
   let printf  _t format = Printf.printf format
