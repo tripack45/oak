@@ -110,3 +110,26 @@ struct
       to_string = to_string;
     }
 end
+
+module PhaseRename = 
+struct
+  module P = PhaseRename
+
+  type from_t = PhaseLexical.to_t
+  type to_t   = ElAstRenamed.Syntax.m list
+
+  let pass : (from_t, to_t) Passman.pass = 
+    let rename _o mods = 
+      match P.run mods with
+      | P.Rst.Ok    (r, _warns)     -> Some r
+      | P.Rst.Error (_errs, _warns) -> None
+    in
+    let to_string resolved =
+      List.map resolved ~f:ElAstRenamed.ToString.m_to_string |> String.concat ~sep:"\n"
+    in
+    {
+      name = "PhaseRename";
+      func = rename;
+      to_string = to_string;
+    }
+end

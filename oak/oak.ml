@@ -26,10 +26,17 @@ let pipeline =
     Passman.dump 
   ) |>>
   (
-    Passman.log "== Lexical ==\n" |>>
     Passman.ignore (
-      Passman.pass Pass.PhaseLexical.pass |>>
-      Passman.dump 
+      (
+        Passman.log "== Lexical ==\n" |>>
+        Passman.pass Pass.PhaseLexical.pass |>>
+        Passman.dump 
+      ) |>>
+      (
+        Passman.log "== Rename ==\n" |>>
+        Passman.pass Pass.PhaseRename.pass |>>
+        Passman.dump 
+      )
     ) 
   ) |>>
   ( 
