@@ -1,2 +1,2 @@
-module WarnParentheseDepth = WarnParentheseDepth
-module WarnCodeLen = WarnCodeLen
+module WarnParenDep  = WarnParenDep
+module WarnCodeLen   = WarnCodeLen

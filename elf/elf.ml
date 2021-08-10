@@ -1,5 +1,5 @@
 let max_paren_depth = 6
-let code_len_args : Pass.WarnCodeLen.CodeLen.code_len_args = { 
+let len_args : Pass.WarnCodeLen.len_args = { 
     m = ((1000, 1000.), (750, 750.)); 
     func = ((150, 150.), (100, 100.)); 
     lambda = ((80, 80.), (60, 60.)) 
@@ -65,11 +65,11 @@ end = struct
 
   let analysis_m ({ src; m; _ } as modl) =
     let () = Driver.print_title "Analysis" "ParenthesesDepth" in
-    let () = ElfPass.WarnParentheseDepth.dump_result src 
-             @@ ElfPass.WarnParentheseDepth.run ~max_depth:max_paren_depth m in
+    let () = ElfPass.WarnParenDep.dump_result src 
+             @@ ElfPass.WarnParenDep.run ~max_depth:max_paren_depth m in
     let () = Driver.print_title "Analysis" "CodeLength" in
     let () = ElfPass.WarnCodeLen.dump_result src 
-             @@ ElfPass.WarnCodeLen.run ~args:code_len_args m in
+             @@ ElfPass.WarnCodeLen.run ~args:len_args m in
     modl
 
   let resolve_module_dependency (modules: t list) =
@@ -118,7 +118,5 @@ let () =
           ElmModule.create_meta n x
       )
     |> List.map ElmModule.of_meta
-    (* |> List.map ElmModule.analysis_m
-    |> ElmModule.resolve_module_dependency
-    |> ElmModule.resolve_ast *)
+    |> List.map ElmModule.analysis_m
     |> ignore
