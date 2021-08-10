@@ -5,7 +5,8 @@ struct
   module type PAR =
   sig
       type ('r, 'w, 'e) t
-      val map         : 'r list -> f:('r  -> ('rr, 'w, 'e) t) -> ('rr list, 'w, 'e) t
+      val map         : 'r list -> f:('r -> ('rr, 'w, 'e) t) -> ('rr list, 'w, 'e) t
+      val iter        : 'r list -> f:('r -> (unit, 'w, 'e) t) -> (unit, 'w, 'e) t
       val filter      : 'r list -> f:('r -> (bool, 'w, 'e) t) -> ('r list, 'w, 'e) t
       val filter_map  : 'r list -> f:('r -> ('r2 option, 'w, 'e) t) -> ('r2 list, 'w, 'e) t
 
@@ -28,6 +29,7 @@ struct
   sig
     type ('r, 'w, 'e) t
     val map         : 't list -> f:('t -> ('r, 'w, 'e) t) -> ('r list, 'w, 'e) t
+    val iter        : 'r list -> f:('r -> (unit, 'w, 'e) t) -> (unit, 'w, 'e) t
     val fold_left   : 't list -> init:('r, 'w, 'e) t -> f:('r -> 't -> ('r, 'w, 'e) t) -> ('r, 'w, 'e) t
     val fold_right  : 't list -> init:('r, 'w, 'e) t -> f:('t -> 'r -> ('r, 'w, 'e) t) -> ('r, 'w, 'e) t
     val fold        : 't list -> init:('r, 'w, 'e) t -> f:('r -> 't -> ('r, 'w, 'e) t) -> ('r, 'w, 'e) t
@@ -43,6 +45,7 @@ struct
       type ('r, 'w, 'e) t
       val lift        : ('r list -> 'rr) -> ('r list, 'w, 'e) t -> ('rr, 'w, 'e) t
       val map         : ('r list, 'w, 'e) t -> f:('r  -> 'rr) -> ('rr list, 'w, 'e) t
+      val iter        : ('r list, 'w, 'e) t -> f:('r  -> unit) -> (unit, 'w, 'e) t
       val fold        : ('r list, 'w, 'e) t -> init:'rr -> f:('rr -> 'r -> 'rr) -> ('rr, 'w, 'e) t
       val foldi       : ('r list, 'w, 'e) t -> init:'rr -> f:(int -> 'rr -> 'r -> 'rr) -> ('rr, 'w, 'e) t
       val fold_left   : ('r list, 'w, 'e) t -> init:'rr -> f:('rr -> 'r -> 'rr) -> ('rr, 'w, 'e) t
@@ -234,14 +237,17 @@ struct
     module Par : Sig.PAR with type ('r, 'w, 't) t := ('r, 'w, 't) t = 
     struct
       let map xs ~f = 
-          List.map xs ~f 
-      |> List.fold_left ~init:(return []) ~f:( 
-          fun lhs m -> 
-            bind (both lhs m) ~f:(
-              fun (l, m) -> return @@ m :: l
+        List.map xs ~f 
+          |> List.fold_left ~init:(return []) ~f:( 
+              fun lhs m -> 
+                bind (both lhs m) ~f:(
+                  fun (l, m) -> return @@ m :: l
+                )
             )
-        )
-      |> bind ~f:(fun l -> return @@ List.rev l)
+          |> bind ~f:(fun l -> return @@ List.rev l)
+
+      let iter xs ~f =
+        map xs ~f |> bind ~f:(fun _ -> return ())
 
       let filter_map xs ~f = 
         bind (map xs ~f) ~f:(fun xs -> return @@ List.filter_opt xs)
@@ -288,6 +294,9 @@ struct
           fun i accum x -> bind accum ~f:(fun accum' -> f i accum' x)
         )
 
+      let iter xs ~f = 
+        fold ~init:(return ()) ~f:(fun () x -> f x) xs
+
       let map xs ~f =
         fold_left xs ~init:(return []) ~f:(
           fun xs' x -> bind (f x) ~f:(fun x' -> return (x'::xs'))
@@ -329,6 +338,7 @@ struct
     struct
       let lift f rs = bind rs ~f:(fun rs -> return (f rs))
       let map rs ~f = lift (List.map ~f) rs
+      let iter rs ~f = lift (List.iter ~f) rs
       let fold_left rs ~init ~f = lift (List.fold_left ~init ~f) rs
       let fold_right rs ~init ~f = lift (List.fold_right ~init ~f) rs
       let fold rs ~init ~f = lift (List.fold ~init ~f) rs
