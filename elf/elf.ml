@@ -5,6 +5,14 @@ let len_args : Pass.WarnCodeLen.len_args = {
     lambda = ((80, 80.), (60, 60.)) 
   }
 
+let dim_args : Pass.WarnOverArity.dim_args = {
+    fapp   = 8;
+    tuple  = 6;
+    list   = 12; 
+    record = 12; 
+    dcon   = 12;
+  }
+
 module Driver = Oaklib.Driver
 module Src = Oaklib.Src
 module ElAst = Oaklib.ElAst
@@ -70,6 +78,9 @@ end = struct
     let () = Driver.print_title "Analysis" "CodeLength" in
     let () = ElfPass.WarnCodeLen.dump_result src 
              @@ ElfPass.WarnCodeLen.run ~args:len_args m in
+    let () = Driver.print_title "Analysis" "OverDimension" in
+    let () = ElfPass.WarnOverArity.dump_result src 
+             @@ ElfPass.WarnOverArity.run ~args:dim_args m in
     modl
 
   let resolve_module_dependency (modules: t list) =
