@@ -6,7 +6,6 @@ struct
   sig
       type ('r, 'w, 'e) t
       val map         : 'r list -> f:('r  -> ('rr, 'w, 'e) t) -> ('rr list, 'w, 'e) t
-      val map_then    : 'r list -> fmap:('r  -> ('r2, 'w, 'e) t) -> fthen:('r2 list -> 'r3) -> ('r3, 'w, 'e) t
       val filter      : 'r list -> f:('r -> (bool, 'w, 'e) t) -> ('r list, 'w, 'e) t
       val filter_map  : 'r list -> f:('r -> ('r2 option, 'w, 'e) t) -> ('r2 list, 'w, 'e) t
 
@@ -244,11 +243,8 @@ struct
         )
       |> bind ~f:(fun l -> return @@ List.rev l)
 
-      let map_then xs ~fmap ~fthen = 
-        map xs ~f:fmap |> bind ~f:(fun xs' -> return @@ fthen xs')
-
       let filter_map xs ~f = 
-        map_then xs ~fmap:f ~fthen:List.filter_opt
+        bind (map xs ~f) ~f:(fun xs -> return @@ List.filter_opt xs)
 
       let filter xs ~f = 
         filter_map xs ~f:(

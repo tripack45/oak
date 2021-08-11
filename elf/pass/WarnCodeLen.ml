@@ -63,7 +63,7 @@ let merge ((px, wx)) ((py, wy)) =
 let merge_all =
   Core.List.fold ~init:bot ~f:merge
 
-let merge_map r ~fmap = R.Par.map_then ~fmap ~fthen:merge_all r
+let merge_map r ~fmap = R.Par.map r ~f:fmap >>| merge_all
 
 let merge_t l = ok @@ merge_all l
 

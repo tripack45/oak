@@ -382,7 +382,7 @@ let collect_binders (pat : P.pat') : R.varid' list rslt =
  * reason the semantics. *)
 let bind_pats ?prefix vctx pats =
   let var_prefix = VarId.of_string "x" in
-  let* varids' = Rst.Par.map_then pats ~fmap:collect_binders ~fthen:List.concat in
+  let* varids' = Rst.Par.map pats ~f:collect_binders >>| List.concat in
   (* This is evaluated only for the side effects, i.e. the warnings *)
   let* _ = Rst.Seq.fold varids' ~init:(ok []) ~f:(
     fun seen varid' -> 
@@ -756,21 +756,7 @@ and translate_decls (ctx : Ctx.t) dicts decls =
   in
 
   let* (tycons', decls') = 
-    Rst.Par.map_then decls 
-      ~fthen:(
-        List.fold_right ~init:([], []) ~f:(
-          (* TODO: Add an extra step to attach type annotations to their coresponding defintions
-          * Right now this translation simply throws away all type annotations, because the parse
-          * does not support it for now. *)
-          fun decl (tycons, vals) ->
-            match decl with 
-            | `TyCon t  -> (t::tycons, vals)
-            | `Val   v  -> (tycons, v::vals) 
-            | `Annot    -> (tycons, vals) 
-            | `Port     -> (tycons, vals) 
-        )
-      )
-      ~fmap:(
+    Rst.Par.map decls ~f:(
         fun decl ->
           let bind_tvars_of_tycon tycon tvars =
             match List.find_a_dup ~compare:(Node.compare TVarId.compare) tvars with
@@ -846,7 +832,19 @@ and translate_decls (ctx : Ctx.t) dicts decls =
             let* e'   = translate_expr ctx'' dicts e
             and* pat' = translate_pat  annots ctx'' dicts pat in 
             ok @@ `Val (R.Pat (pat', e'))
-      ) 
+      ) >>| (
+        List.fold_right ~init:([], []) ~f:(
+          (* TODO: Add an extra step to attach type annotations to their coresponding defintions
+          * Right now this translation simply throws away all type annotations, because the parse
+          * does not support it for now. *)
+          fun decl (tycons, vals) ->
+            match decl with 
+            | `TyCon t  -> (t::tycons, vals)
+            | `Val   v  -> (tycons, v::vals) 
+            | `Annot    -> (tycons, vals) 
+            | `Port     -> (tycons, vals) 
+        )
+      )
   in
   (* Returns 
    * - The contexts for expression under the declared scope 

@@ -69,7 +69,7 @@ let run ?(max_depth=5) ?soft (Mod (mdecl, _imports, decls)) : result =
 
   and expr_par_depths ctx expr : result = 
     let dep = expr_par_depths ctx in
-    let dep_map_max ~fmap = R.Par.map_then ~fmap ~fthen:maxints in
+    let dep_map_max ~fmap rs = R.Par.map rs ~f:fmap >>| maxints in
     let dep_max = dep_map_max ~fmap:dep in
     let (expr', (pos, par)) = both expr in
     (* Stacks the parenthese depths of current expr node *)
@@ -142,7 +142,7 @@ let run ?(max_depth=5) ?soft (Mod (mdecl, _imports, decls)) : result =
     )
     ~default:BindingContext.empty
   in
-  R.Par.map_then decls ~fmap:(decl_par_depths ctx) ~fthen:maxints
+  R.Par.map decls ~f:(decl_par_depths ctx) >>| maxints
 
 
 let dump_result src r = 
