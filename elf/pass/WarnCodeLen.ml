@@ -272,9 +272,14 @@ struct
           and* e = expr_size ctx' expr' in
           merge_t [p; e]
         in
-        let* e = siz e
-        and* bs = merge_map branches ~fmap:branch_size in
-        merge_t [(2, 0.); e; bs]
+        let* e = siz e in
+        let* bs = R.Par.map ~f:branch_size branches in
+        let* largest_bs = R.Seq.fold_left ~init:(ok(0,0.)) bs ~f:(
+          fun (ax, ay) (bx, by) ->
+            ok (Core.Int.max ax bx, Core.Float.max ay by)
+          )
+        in
+        merge_t [(2, 0.); e; largest_bs ]
       | Lambda (pat's, expr')      ->
         let ctx' = BindingContext.add ctx (Lam, pos) in
         let siz = check_lambda ctx' expr' in
