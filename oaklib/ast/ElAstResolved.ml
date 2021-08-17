@@ -165,7 +165,7 @@ struct
     | List       of pat node list
     | Tuple      of pat node list
     | Record     of field' list
-    | Con        of dconref' * (pat node list)
+    | DCon       of dconref' * (pat node list)
 
   type pat' = pat node
 
@@ -192,7 +192,7 @@ struct
     | Project    of expr' * field' (* Record Access *)
     | Extension  of expr' * (field' * expr') list 
     (* Data construction *)
-    | Con        of dconref' * (expr' list)
+    | DCon       of dconref' * (expr' list)
     (* Identifier refernce *)
     | Var        of varref'
     (* Literals *)
@@ -267,7 +267,7 @@ struct
     | List pats           -> Core.List.concat_map pats ~f:annots_in_pat
     | Tuple pats          -> Core.List.concat_map pats ~f:annots_in_pat
     | Record _            -> []
-    | Con (_, pats)       -> Core.List.concat_map pats ~f:annots_in_pat
+    | DCon (_, pats)      -> Core.List.concat_map pats ~f:annots_in_pat
 end
 
 module Alias = 
@@ -287,7 +287,7 @@ struct
       | List       of pat' list
       | Tuple      of pat' list
       | Record     of field' list
-      | Con        of dconref' * (pat' list)
+      | DCon       of dconref' * (pat' list)
   end
 
   module Expr = 
@@ -312,7 +312,7 @@ struct
       | Project    of expr' * field' (* Record Access    *)
       | Extension  of expr' * (field' * expr') list 
       (* Data construction *)
-      | Con        of dconref' * (expr' list)
+      | DCon       of dconref' * (expr' list)
       (* Identifier refernce *)
       | Var        of varref'
       (* Literals *)
@@ -498,7 +498,7 @@ struct
     | List pats    -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
     | Tuple pats   -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
     | Record fs    -> surround ("{", "}") @@ concat_map ", " field_to_string fs
-    | Con (con, pats) -> 
+    | DCon (con, pats) -> 
       match pats with 
       | [] -> dconref_to_string con
       | _ -> sprintf "%s of %s" (dconref_to_string con)  (concat_map " " pat_to_string pats)
@@ -559,7 +559,7 @@ struct
     | Extension  (e, fs) -> 
       let record_field (f, e) = field_to_string f ^ " = " ^ pp e in
       surround ("<{", "}>") @@ sprintf "%s @ %s" (pp e) (concat_map ";" record_field fs)
-    | Con (con, es)      -> dconref_to_string con ^ concat_map " " pp es
+    | DCon (con, es)     -> dconref_to_string con ^ concat_map " " pp es
     | Var (var)          -> varref_to_string var
     | Literal lit        -> lit_to_string lit
 

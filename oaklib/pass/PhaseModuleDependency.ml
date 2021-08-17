@@ -185,10 +185,10 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
       ) in
       Extension (e', fes')
     | Var qvar             -> let+ qv' = (lift_node resolve_qvar) qvar in Alias.Expr.Var qv'
-    | Con (qdcon, es)      -> 
+    | DCon (qdcon, es)     -> 
       let+ qdcon' = (lift_node resolve_qdcon) qdcon 
       and+ es' = resolve_exprs' es in
-      Con (qdcon', es')
+      DCon (qdcon', es')
 
   and resolve_pat (pat : pat) =
     let resolve_pat'  = lift_node resolve_pat in
@@ -205,10 +205,10 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
     | List pats    -> let+ pats' = resolve_pats' pats in Alias.Pattern.List pats'
     | Tuple pats   -> let+ pats' = resolve_pats' pats in Alias.Pattern.Tuple pats'
     | Record _     -> failwith "Unimplemented: record pat resolve"
-    | Con (qdcon, pats) -> 
+    | DCon (qdcon, pats) -> 
       let+ pats'  = resolve_pats' pats 
       and+ qdcon' = (lift_node resolve_qdcon) qdcon in
-      Alias.Pattern.Con (qdcon', pats')
+      Alias.Pattern.DCon (qdcon', pats')
 
   and resolve_path_opt path_node_opt =
     match path_node_opt with

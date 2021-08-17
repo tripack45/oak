@@ -363,11 +363,11 @@ let collect_binders' (pat : P.pat') =
     | P.Any 
     | P.Unit 
     | P.EmptyList 
-    | P.Literal _     -> acc
-    | P.List pats     -> List.fold pats ~init:acc ~f
-    | P.Tuple pats    -> List.fold pats ~init:acc ~f
-    | P.Con (_, pats) -> List.fold pats ~init:acc ~f
-    | P.Var (v, _)    -> Map.add_exn acc ~key:(Node.elem v) ~data:v
+    | P.Literal _      -> acc
+    | P.List pats      -> List.fold pats ~init:acc ~f
+    | P.Tuple pats     -> List.fold pats ~init:acc ~f
+    | P.DCon (_, pats) -> List.fold pats ~init:acc ~f
+    | P.Var (v, _)     -> Map.add_exn acc ~key:(Node.elem v) ~data:v
   in
   f VarId.Map.empty pat
 let collect_binders (pat : P.pat') =
@@ -475,13 +475,13 @@ let ftv_in_pat pat =
     | P.Any 
     | P.Unit 
     | P.EmptyList 
-    | P.Literal _     -> acc
-    | P.List pats     -> List.fold pats ~init:acc ~f
-    | P.Tuple pats    -> List.fold pats ~init:acc ~f
-    | P.Con (_, pats) -> List.fold pats ~init:acc ~f
+    | P.Literal _      -> acc
+    | P.List pats      -> List.fold pats ~init:acc ~f
+    | P.Tuple pats     -> List.fold pats ~init:acc ~f
+    | P.DCon (_, pats) -> List.fold pats ~init:acc ~f
     | P.Var (_, annot) -> 
       match annot with 
-      | Some (_, typ) -> TVarId.Set.union (ftv_in_typ typ) acc
+      | Some (_, typ)  -> TVarId.Set.union (ftv_in_typ typ) acc
       | None -> acc
   in
   f TVarId.Set.empty pat
@@ -510,10 +510,10 @@ let rec translate_pat (ctx : Ctx.t) dicts (pat : P.pat') =
         let* typ'  = translate_typ (ctx.tctx, ctx.tvctx) dicts typ in
         ok' @@ A.Pat.Var (twin, Some (twin', typ'))
     end
-  | P.Con (qcon, pats) -> 
+  | P.DCon (qcon, pats) -> 
     let* con'  = resolve_dcon dicts.CtxOpen.dctx ctx.dctx qcon
     and* pats' = Rst.Par.map pats ~f:tr in
-    ok' @@ A.Pat.Con (con', pats')
+    ok' @@ A.Pat.DCon (con', pats')
 
 and translate_typ (tctx, tvctx) dicts (typ : P.typ') =
   let (elem, pos) = Node.both typ in
@@ -601,10 +601,10 @@ let rec translate_expr (ctx : Ctx.t) dicts (expr : P.expr') : R.expr' rslt =
     ) in
     ok' @@ R.Record fields'
   | P.Var v                -> let* v' = resolve_var dicts.vctx ctx.vctx v in ok' @@ R.Var v'
-  | P.Con (qcon, es)       -> 
+  | P.DCon (qcon, es)      -> 
     let* con' = resolve_dcon dicts.dctx ctx.dctx qcon
     and* es'  = Rst.Par.map es ~f:tr in
-    ok' @@ R.Con (con', es')
+    ok' @@ R.DCon (con', es')
 
 (* Declarations in Elm presents a wide range of semantics issues that needs to be
  * carefully taken care of.contents

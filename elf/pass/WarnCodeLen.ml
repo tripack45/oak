@@ -146,7 +146,7 @@ struct
     | Record fs    -> 
       let* fs = merge_map fs ~fmap:(fun (f, _) -> field_size (node f ())) in
       merge_t [readable; fs]
-    | Con (qdcon', pat's) -> 
+    | DCon (qdcon', pat's) -> 
       let* qd = qdcon_size qdcon'
       and* ps = merge_map pat's ~fmap:pat_size in
       merge_t [qd; ps]
@@ -325,7 +325,7 @@ struct
         let* e = siz e
         and* fs = merge_map fs ~fmap:(fun fe -> siz @@ snd fe) in
         merge_t [readable; e; fs]
-      | Con (qdcon', es)   -> 
+      | DCon (qdcon', es)  -> 
         let* qd = qdcon_size qdcon'
         and* es = merge_map es ~fmap:siz in
         merge_t [qd; es]

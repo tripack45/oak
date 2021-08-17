@@ -64,10 +64,10 @@ type warn =
   | ImportShadowingTyCon of (R.tyconid' * R.path) * R.path
 
 type err = 
-  | RepeatedBinder        of R.varid'   * (R.varid' * P.pat')
-  | VarIdRedefined        of R.varid'   * R.varid' 
-  | TyConIdRedefined      of R.tyconid' * R.tyconid'
-  | DConIdRedefined       of R.dconid'  * R.dconid'
+  | RepeatedBinder         of R.varid'   * (R.varid' * P.pat')
+  | VarIdRedefined         of R.varid'   * R.varid' 
+  | TyConIdRedefined       of R.tyconid' * R.tyconid'
+  | DConIdRedefined        of R.dconid'  * R.dconid'
   | RepeatedAnnotation     of (P.var' * P.typ') * (P.var' * P.typ')
   | RepeatedPort     of (P.var' * P.typ') * (P.var' * P.typ')
   | DanglingTypeAnnotation of (P.var' * P.typ')
@@ -361,13 +361,13 @@ let collect_binders (pat : P.pat') : R.varid' list rslt =
     | P.Any 
     | P.Unit 
     | P.EmptyList 
-    | P.Literal _     -> ok acc
-    | P.Alias (_, _)  -> failwith "Unimplemented: pat alias resolve"
-    | P.Cons (p, pn)  -> Rst.Seq.fold [p; pn] ~init:(ok acc) ~f
-    | P.List pats     -> Rst.Seq.fold pats ~init:(ok acc) ~f
-    | P.Tuple pats    -> Rst.Seq.fold pats ~init:(ok acc) ~f
-    | P.Record _      -> failwith "Unimplemented: record pat resolve"
-    | P.Con (_, pats) -> Rst.Seq.fold pats ~init:(ok acc) ~f
+    | P.Literal _      -> ok acc
+    | P.Alias (_, _)   -> failwith "Unimplemented: pat alias resolve"
+    | P.Cons (p, pn)   -> Rst.Seq.fold [p; pn] ~init:(ok acc) ~f
+    | P.List pats      -> Rst.Seq.fold pats ~init:(ok acc) ~f
+    | P.Tuple pats     -> Rst.Seq.fold pats ~init:(ok acc) ~f
+    | P.Record _       -> failwith "Unimplemented: record pat resolve"
+    | P.DCon (_, pats) -> Rst.Seq.fold pats ~init:(ok acc) ~f
     | P.Var v -> 
       let eq v1 v2 = ElAst.VarId.compare (Node.elem v1) (Node.elem v2) = 0 in
       match List.find acc ~f:(eq v) with 
@@ -476,18 +476,18 @@ let ftv_in_pat annots pat =
     | P.Any 
     | P.Unit 
     | P.EmptyList 
-    | P.Literal _     -> []
-    | P.Alias (p, v)  -> List.concat_map [p] ~f:r @ 
+    | P.Literal _      -> []
+    | P.Alias (p, v)   -> List.concat_map [p] ~f:r @ 
       begin
         match Map.find annots (Node.elem v) with
         | None -> []
         | Some (_, typ) -> ftv_in_typ typ
       end
-    | P.Cons (p, pn)  -> List.concat_map [p; pn] ~f:r
-    | P.List pats     -> List.concat_map pats ~f:r
-    | P.Tuple pats    -> List.concat_map pats ~f:r
-    | P.Record _      -> failwith "Unimplemented: record pat resolve"
-    | P.Con (_, pats) -> List.concat_map pats ~f:r
+    | P.Cons (p, pn)   -> List.concat_map [p; pn] ~f:r
+    | P.List pats      -> List.concat_map pats ~f:r
+    | P.Tuple pats     -> List.concat_map pats ~f:r
+    | P.Record _       -> failwith "Unimplemented: record pat resolve"
+    | P.DCon (_, pats) -> List.concat_map pats ~f:r
     | P.Var v -> 
       match Map.find annots (Node.elem v) with
       | None -> []
@@ -521,10 +521,10 @@ let rec translate_pat (amap : amap) (ctx : Ctx.t) dicts (pat : P.pat') =
         and* typ'  = translate_typ (ctx.tctx, ctx.tvctx) dicts typ in
         ok' @@ A.Pat.Var (twin, Some (twin', typ'))
     )
-  | P.Con (qcon, pats) -> 
+  | P.DCon (qcon, pats) -> 
     let* con'  = resolve_dcon dicts.CtxOpen.dctx ctx.dctx qcon
     and* pats' = Rst.Par.map pats ~f:tr in
-    ok' @@ A.Pat.Con (con', pats')
+    ok' @@ A.Pat.DCon (con', pats')
 
 and translate_typ (tctx, tvctx) dicts (typ : P.typ') =
   let (elem, pos) = Node.both typ in
@@ -613,10 +613,10 @@ let rec translate_expr (ctx : Ctx.t) dicts (expr : P.expr') : R.expr' rslt =
   | P.Project (_e, _f)     -> failwith "Unimplemented Project"
   | P.Extension (_e, _fes) -> failwith "Unimplemented Extension"
   | P.Var v                -> let* v' = resolve_var dicts.vctx ctx.vctx v in ok' @@ R.Var v'
-  | P.Con (qcon, es)       -> 
+  | P.DCon (qcon, es)      -> 
     let* con' = resolve_dcon dicts.dctx ctx.dctx qcon
     and* es'  = Rst.Par.map es ~f:tr in
-    ok' @@ R.Con (con', es')
+    ok' @@ R.DCon (con', es')
 
 (* Declarations in Elm presents a wide range of semantics issues that needs to be
  * carefully taken care of.contents

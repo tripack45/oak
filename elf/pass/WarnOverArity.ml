@@ -125,7 +125,7 @@ module OverDim = struct
         let* () = dim e
         and* () = R.Par.iter fs ~f:(fun fe -> dim @@ snd fe) in
         ok ()
-      | Con (_, es)        -> 
+      | DCon (_, es)       -> 
         let* () = check_dcon ctx es
         and* () = dim_iter es in
         ok ()

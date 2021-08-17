@@ -181,8 +181,7 @@ struct
     | List       of (pat node) list
     | Tuple      of (pat node) list
     | Record     of (field * pat node) list
-    (* Data constructor; Todo: DCon *)
-    | Con        of qdcon' * (pat node list)
+    | DCon       of qdcon' * (pat node list)
   type pat' = pat node
 
   type typ = 
@@ -264,8 +263,7 @@ struct
     | ProjFunc   of field' (* .field *)
     | Project    of expr' * field' (* Record Access *)
     | Extension  of expr' * (field' * expr') list 
-    (* Data construction; Todo: DCon *)
-    | Con        of qdcon' * (expr' list)
+    | DCon       of qdcon' * (expr' list)
     (* Identifier refernce *)
     | Var        of qvar'
     (* Literals *)
@@ -326,7 +324,7 @@ struct
       | List       of pat' list
       | Tuple      of pat' list
       | Record     of (field * pat') list
-      | Con        of qdcon' * (pat' list)
+      | DCon       of qdcon' * (pat' list)
 
     type pat' = Syntax.pat'
   end
@@ -369,7 +367,7 @@ struct
       | Project    of expr' * field' (* Record Access    *)
       | Extension  of expr' * (field' * expr') list 
       (* Data construction *)
-      | Con        of qdcon' * (expr' list)
+      | DCon       of qdcon' * (expr' list)
       (* Identifier refernce *)
       | Var        of qvar'
       (* Literals *)
@@ -565,7 +563,7 @@ struct
     | List pats     -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
     | Tuple pats    -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
     | Record (fields) -> surround ("{", "}") @@ concat_map ", " (fun (f, _pat) -> FieldId.to_string f) fields
-    | Con (qdcon, pats) -> 
+    | DCon (qdcon, pats) -> 
       match pats with 
       | [] -> qdcon_to_string qdcon
       | _ -> sprintf "%s of %s" (qdcon_to_string qdcon)  (concat_map " " pat_to_string pats)
@@ -622,7 +620,7 @@ struct
       | Extension  (e, fs) -> 
         let record_field (f, e) = field_to_string f ^ " = " ^ pp e in
         surround ("<{", "}>") @@ sprintf "%s @ %s" (pp e) (concat_map ";" record_field fs)
-      | Con (qdcon, es)    -> qdcon_to_string qdcon ^ concat_map " " pp es
+      | DCon (qdcon, es)   -> qdcon_to_string qdcon ^ concat_map " " pp es
       | Var qvar           -> qvar_to_string qvar
       | Literal lit        -> lit_to_string lit
     in 

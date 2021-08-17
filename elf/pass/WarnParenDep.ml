@@ -126,7 +126,7 @@ let run ?(max_depth=5) ?soft (Mod (mdecl, _imports, decls)) : result =
         let* e = dep e
         and* fs = dep_map_max fs ~fmap:(fun (_, fe) -> dep fe) in
         maxd [e; fs]
-      | Con (_, es)        -> dep_max es
+      | DCon (_, es)       -> dep_max es
       | Var _ 
       | Literal  _ 
       | Unit  

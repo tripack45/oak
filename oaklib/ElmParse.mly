@@ -104,7 +104,7 @@ struct
 
   let gcon2pat g : pat =
     match g with 
-    | QDCon c   -> Con (c, [])
+    | QDCon c   -> DCon (c, [])
     | Unit      -> Unit
     | EmptyList -> EmptyList
 
@@ -112,7 +112,7 @@ struct
     match g with 
     | Unit       -> Unit
     | EmptyList  -> List []
-    | QDCon c    -> Con (c, [])
+    | QDCon c    -> DCon (c, [])
 
   let mod_decl   (con, exposings) _ = (MDecl (con, exposings))
   let mod_import (qcon, as_con, exposings) _ = (Import (qcon, as_con, exposings))
@@ -445,7 +445,7 @@ cnpat:
 // for support in function arguments. Let's restrict the patter to qcon
 // for now and see how it goes
 qpat:
-| qdcon nonempty_list(apat)                                                         { pat (Pattern.Con ($1, $2))   $loc }
+| qdcon nonempty_list(apat)                                                         { pat (Pattern.DCon ($1, $2))  $loc }
 | apat                                                                              { $1 } 
 
 apat:

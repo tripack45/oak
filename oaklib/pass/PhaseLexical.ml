@@ -143,7 +143,7 @@ struct
       | EA.Pattern.Literal _ 
       | EA.Pattern.EmptyList     -> None
       | EA.Pattern.Var v         -> Option.some_if (VarId.equal (Node.elem v) varid) v
-      | EA.Pattern.Con (_, pats) 
+      | EA.Pattern.DCon (_, pats) 
       | EA.Pattern.Tuple pats  
       | EA.Pattern.List  pats    -> List.map ~f:find_opt pats |> List.filter_opt |> List.hd
       | EA.Pattern.Cons _
@@ -233,7 +233,7 @@ let rec extract_pat (pat : E.pat') : (DConId.Set.t * VarId.Set.t) rslt =
   | E.Var v         -> ok (DConId.Set.empty, VarId.Set.singleton (Node.elem v))
   | E.Cons _
   | E.Record _      -> failwith "Unimplemented"
-  | E.Con (c, pats) ->
+  | E.DCon (c, pats) ->
     let* (dcons, bvs) = extract_pats pats in 
     match Node.elem c with 
     | QDCon (None, dcon) -> ok (DConId.Set.add dcons (Node.elem dcon), bvs)
@@ -267,8 +267,8 @@ let rec annotate_pat annots pat_node =
     annotate_pats pats (fun pats' ftycons' -> (node @@ LA.Pattern.List pats', ftycons'))
   | EA.Pattern.Tuple pats     -> 
     annotate_pats pats (fun pats' ftycons' -> (node @@ LA.Pattern.Tuple pats', ftycons'))
-  | EA.Pattern.Con (c, pats)  ->
-    annotate_pats pats (fun pats' ftycons' -> (node @@ LA.Pattern.Con (c, pats'), ftycons'))
+  | EA.Pattern.DCon (c, pats) ->
+    annotate_pats pats (fun pats' ftycons' -> (node @@ LA.Pattern.DCon (c, pats'), ftycons'))
   | EA.Pattern.Var qv         -> 
     let (annot_opt, ftycons) = annotate_var annots qv in 
     (node @@ LA.Pattern.Var (qv, annot_opt), ftycons)
@@ -513,7 +513,7 @@ and lexical_expr expr : (L.expr' * Use.Set.t) rslt =
   | EA.Expr.Extension _ -> failwith "Unimplemented"
   | EA.Expr.ProjFunc _  -> failwith "Unimplemented"
   | EA.Expr.Project _   -> failwith "Unimplemented"
-  | EA.Expr.Con (qdcon, es) -> 
+  | EA.Expr.DCon (qdcon, es) -> 
     let* (expr', es_fis) = R.Par.map es ~f:lexical_expr >>| List.unzip in
     let q_fi = 
       match Node.elem qdcon with 
@@ -521,7 +521,7 @@ and lexical_expr expr : (L.expr' * Use.Set.t) rslt =
       | E.QDCon (Some _, _) -> empty_fis
     in
     let fis' = merge_fis (q_fi :: es_fis) in
-    ok' (LA.Expr.Con (qdcon, expr')) fis'
+    ok' (LA.Expr.DCon (qdcon, expr')) fis'
   | EA.Expr.Literal l -> ok' (LA.Expr.Literal l) empty_fis
   | EA.Expr.Var qvar -> 
     let expr' = LA.Expr.Var qvar in

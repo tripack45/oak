@@ -134,7 +134,7 @@ struct
     | Literal    of lit'
     | List       of (pat node) list
     | Tuple      of (pat node) list
-    | Con        of qdcon' * (pat node list)
+    | DCon        of qdcon' * (pat node list)
 
   type pat' = pat node
 
@@ -173,7 +173,7 @@ struct
     | List       of expr' list  (* >= 0 elements *)
     | Record     of (field' * expr') list
     (* Data construction *)
-    | Con        of qdcon' * (expr' list)
+    | DCon       of qdcon' * (expr' list)
     (* Identifier refernce *)
     | Var        of qvar'
     (* Literals *)
@@ -214,7 +214,7 @@ struct
       | Literal    of lit'
       | List       of (pat node) list
       | Tuple      of (pat node) list
-      | Con        of qdcon' * (pat node list)
+      | DCon       of qdcon' * (pat node list)
 
     type pat' = Syntax.pat'
   end
@@ -273,7 +273,7 @@ struct
       | List       of expr' list  (* >= 0 elements *)
       | Record     of (field' * expr') list
       (* Data construction *)
-      | Con        of qdcon' * (expr' list)
+      | DCon       of qdcon' * (expr' list)
       (* Identifier refernce *)
       | Var        of qvar'
       (* Literals *)
@@ -426,7 +426,7 @@ struct
     | Literal lit  -> lit_to_string lit
     | List pats   -> surround ("[", "]") @@ concat_map ", " pat_to_string pats
     | Tuple pats  -> surround ("(", ")") @@ concat_map ", " pat_to_string pats
-    | Con (qdcon, pats) -> 
+    | DCon (qdcon, pats) -> 
       match pats with 
       | [] -> qdcon_to_string qdcon
       | _ -> sprintf "%s of %s" (qdcon_to_string qdcon)  (concat_map " " pat_to_string pats)
@@ -450,7 +450,7 @@ struct
       | Record field_es    -> 
         let record_field (f, e) = field_to_string f ^ " = " ^ pp e in
         surround ("<{", "}>") @@ (concat_map ";" record_field field_es)
-      | Con (qdcon, es)    -> qdcon_to_string qdcon ^ concat_map " " pp es
+      | DCon (qdcon, es)   -> qdcon_to_string qdcon ^ concat_map " " pp es
       | Var qvar           -> qvar_to_string qvar
       | Literal lit        -> lit_to_string lit
     in 
