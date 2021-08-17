@@ -196,14 +196,14 @@ struct
    * limit is size's the lowest upper bound;
    * soft is the size that higher level sees in case of violation
    *)
-  type len_args = { m : size * size; func : size * size; lambda : size * size }
+  type len_spec = { m : size * size; func : size * size; lambda : size * size }
   let len_spec = { 
     m = ((1000, 1000.0), (800, 800.0)); 
     func = ((100, 100.0), (70, 70.0)); 
     lambda = ((20, 20.0), (20, 20.0) )
   }
 
-  let run ?(args = len_spec)
+  let run ?(spec = len_spec)
     (Mod (mdecl, _imports, decls)) : result =
 
     let check ctx site (limit, soft) size : result =
@@ -215,13 +215,13 @@ struct
     in
 
     let check_m ctx size = 
-      check ctx (Module mdecl) args.m size
+      check ctx (Module mdecl) spec.m size
     in
     let check_func ctx decl' size = 
-      check ctx (Function decl') args.func size
+      check ctx (Function decl') spec.func size
     in
     let check_lambda ctx expr' size = 
-      check ctx (Lambda expr') args.lambda size
+      check ctx (Lambda expr') spec.lambda size
     in
 
     let rec decl_size ctx (decl': decl') : result =
@@ -347,7 +347,7 @@ struct
   check_m ctx m_size
 end
 
-type len_args = CodeLen.len_args = { m : size * size; func : size * size; lambda : size * size }
+type spec = CodeLen.len_spec = { m : size * size; func : size * size; lambda : size * size }
 let run = CodeLen.run
 
 let dump_result src r = 

@@ -1,11 +1,11 @@
 let max_paren_depth = 6
-let len_args : Pass.WarnCodeLen.len_args = { 
+let len_spec : Pass.WarnCodeLen.spec = { 
     m = ((1000, 1000.), (750, 750.)); 
     func = ((150, 150.), (100, 100.)); 
     lambda = ((80, 80.), (60, 60.)) 
   }
 
-let dim_args : Pass.WarnOverArity.dim_args = {
+let dim_spec : Pass.WarnOverArity.spec = {
     fapp   = 8;
     tuple  = 6;
     list   = 12; 
@@ -77,10 +77,10 @@ end = struct
              @@ ElfPass.WarnParenDep.run ~max_depth:max_paren_depth m in
     let () = Driver.print_title "Analysis" "CodeLength" in
     let () = ElfPass.WarnCodeLen.dump_result src 
-             @@ ElfPass.WarnCodeLen.run ~args:len_args m in
+             @@ ElfPass.WarnCodeLen.run ~spec:len_spec m in
     let () = Driver.print_title "Analysis" "OverDimension" in
     let () = ElfPass.WarnOverArity.dump_result src 
-             @@ ElfPass.WarnOverArity.run ~args:dim_args m in
+             @@ ElfPass.WarnOverArity.run ~spec:dim_spec m in
     modl
 
   let resolve_module_dependency (modules: t list) =
