@@ -61,11 +61,11 @@ sig
 
   module StronglyConnectedComponents :
   sig
-    type ('v, 'wit) component = ('v, 'wit) Core.Set.t 
+    type ('v, 'wit) component = ('v, 'wit) Core.Set.t * bool
 
     val scc              : ('v, 'a, 'wit) t -> ('v, 'wit) component WithVertex.t
     (* This function linearizes ssc resulting according to vertex order *)
-    val scc_topsort      : ('v, 'a, 'wit) t -> ('v list) Core.Sequence.t
+    val scc_topsort      : ('v, 'a, 'wit) t -> ('v list * bool) Core.Sequence.t
     (* This function linearizes scc result according to attr *)
     val scc_topsort_attr : ('v, 'a, 'wit) t -> compare:('a -> 'a -> int) -> ('v list) Core.Sequence.t
 end

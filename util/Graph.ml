@@ -123,7 +123,7 @@ struct
 
   module StronglyConnectedComponents =
   struct
-    type ('v, 'wit) component = ('v, 'wit) Core.Set.t
+    type ('v, 'wit) component = ('v, 'wit) Core.Set.t * bool
 
     let condensate g l : ('v, 'vwit) component WithVertex.t =
       let components = l
@@ -138,7 +138,11 @@ struct
         |> Vertex.Set.union_list
       in
       components
-      |> List.map ~f:(fun (i, c) -> (i, (c, Vertex.Set.remove (find_comp_adj c) i)))
+      |> List.map ~f:(fun (i, c) ->
+        let comp_adj =
+          find_comp_adj c
+        in
+        (i, ((c, Vertex.Set.mem comp_adj i), Vertex.Set.remove comp_adj i)))
       |> Vertex.Map.of_alist_exn
       |> of_adj_set_exn
 
@@ -183,16 +187,17 @@ struct
     let scc g : ('v, 'vwit) component WithVertex.t =
       condensate g @@ scc_list g
 
-    let scc_topsort (g : ('v, 'a, 'vwit) t) : 'v list Sequence.t =
-      let scc_g : ('v, 'vwit) Set.t WithVertex.t = scc g in
+    let scc_topsort (g : ('v, 'a, 'vwit) t) : ('v list * bool) Sequence.t =
+      let scc_g = scc g in
       scc_g
       |> TopologicalSort.topsort_attr ~compare:(
-          fun vset_x vset_y -> 
+          fun (vset_x, _) (vset_y, _) -> 
             (comparator g) (Set.min_elt_exn vset_x) (Set.min_elt_exn vset_y)
         )
       |> Sequence.map ~f:(
-          fun scc_v -> 
-            V.attr_exn scc_g scc_v |> Set.to_list
+          fun scc_v ->
+            let (c, r) = V.attr_exn scc_g scc_v in
+            (Set.to_list c, r)
         )
 
     let scc_topsort_attr (g : ('v, 'a, 'vwit) t) ~compare : 'v list Sequence.t =

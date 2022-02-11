@@ -24,7 +24,7 @@
  * The most important work is done in "lexical_decls". This functions is organzied as follows:
  * 
  * - It performs a linear scan through all definitions and collects type annotations into a map. 
- * - It preforms a secon linear scan through all definitions, giving each definition a vertex in dependency 
+ * - It preforms a second linear scan through all definitions, giving each definition a vertex in dependency 
  *   graph, and generate two maps:
  *   - A map (decl_map) from the vertex to 1) the original definition for error reporting 2) the 
  *     set of free ids its definitions relies on, and 3) the "transformed" sub expresssion.
@@ -151,7 +151,7 @@ struct
     in
     Option.value_exn (find_opt pat)
 
-  let scc_component_to_letm dep_graph component letm' =  
+  let scc_component_to_letm dep_graph (component, is_rec) letm' =  
     let to_val_decl = function
        | `Val val_decl -> val_decl
        | `TyCon _      -> failwith "Must be val decl"
@@ -161,12 +161,11 @@ struct
        | `Val _          -> failwith "Must be typ decl"
     in
     match component with 
-    | []     -> failwith "Empty decl component."
+    | []       -> failwith "Empty decl component."
     | [decl_v] -> 
-      let deps       = Directed.V.adj_exn dep_graph decl_v in
       let {decl'; _} = Directed.V.attr_exn dep_graph decl_v in
       begin
-        if Decl.Set.mem deps decl_v then
+        if is_rec then
           match decl' with 
           | `Val decl'   -> L.LetRec ([decl'], letm')
           | `TyCon decl' -> L.LetTypRec ([decl'], letm') 
@@ -180,7 +179,7 @@ struct
         List.map decls_vs ~f:(fun v -> (Directed.V.attr_exn dep_graph v).decl') 
       in
       (* It is not possible syntatically to have types that depends on expressions, 
-       * therefore no scc component may countain both type and expression definitions. *)
+       * therefore no scc component may contain both type and expression definitions. *)
       match List.hd_exn decls' with 
       | `Val _   -> L.LetRec    (List.map decls' ~f:to_val_decl, letm')
       | `TyCon _ -> L.LetTypRec (List.map decls' ~f:to_typ_decl, letm')
@@ -392,7 +391,7 @@ and lexical_decls decls =
         | E.Pat (pat, e) -> 
           let* (e', e_fi) = lexical_expr e
           and* (pat', pat_fis, binded_vars) = annotate_extract_pat annots pat in
-          let deps  = (e_fi <-> vars_as_fis binded_vars) <+> pat_fis in
+          let deps  = e_fi <+> pat_fis in
           let decl' = `Val (node @@ L.Pat (pat', e')) in
           let decl_map' = Map.add_exn decl_map ~key:idx ~data:{deps; decl; decl'} in
           let* binder_map' =
