@@ -146,43 +146,60 @@ struct
       |> Vertex.Map.of_alist_exn
       |> of_adj_set_exn
 
+    (* Kosaraju's algorithm for SCC: 
+     *
+     * 1) A depths first traversal of the graph and obtain list L
+     * 2) Obtain an transposed graph g'
+     * 3) Traverse L, for each element put its neighbors in g' in the same component 
+     *
+     * This algorithm can be used to immediately obtain the condensed graph *)
     let scc_list (g : ('v, 'a, 'vwit) t) : 'v list list =
-      let module Hashtbl = Stdlib.Hashtbl in
-      let compare = comparator g
-      and n = Map.length g.v in
-      let index = Hashtbl.create n
-      and root = Hashtbl.create n
-      and i = ref 0
-      and s = ref []
-      and res = ref [] in
-      let rec dfs u =
-        Hashtbl.replace index u !i;
-        Hashtbl.replace root u !i;
-        i := !i + 1;
-        s := u :: !s;
-        let adj = Map.find_exn g.adj u
-        and search v =
-          if not (Hashtbl.mem index v) then (
-            dfs v;
-            Hashtbl.replace root u
-              (min (Hashtbl.find root u) (Hashtbl.find root v)))
-          else if List.exists ~f:(fun w -> compare v w = 0) !s then
-            Hashtbl.replace root u
-              (min (Hashtbl.find root u) (Hashtbl.find root v))
-        in
-        Set.iter ~f:search adj;
-        if Hashtbl.find index u = Hashtbl.find root u then (
-          let c = ref [] and flag = ref true in
-          while !flag do
-            let v = List.hd_exn !s in
-            s := List.tl_exn !s;
-            c := v :: !c;
-            flag := compare u v <> 0
-          done;
-          res := !c :: !res)
+      let comparator_s = Map.comparator_s g.v in
+      let map_empty = Map.empty comparator_s
+      and set_empty = Set.empty comparator_s in
+      let concat_rev_map l ~f = List.concat (List.rev_map l ~f) in
+      let adj_i = 
+        (* Make sure no edge reference non-existent node (key) *)
+        let g0 = Map.of_key_set (Map.key_set g.adj) ~f:(const []) in
+        Map.fold g.adj ~init:g0 ~f:(
+          fun ~key:v ~data:us g' -> 
+            Set.fold us ~init:g' ~f:(
+              fun g' u -> Map.add_multi g' ~key:u ~data:v
+          )
+        )
       in
-      List.iter ~f:(fun u -> if not (Hashtbl.mem index u) then dfs u) @@ Map.keys g.v;
-      !res
+      (* Obtaining DFS traversal of graph *)
+      let l = 
+        let visited = ref set_empty in
+        let rec visit (v : 'v) =
+          if Set.mem !visited v then 
+            []
+          else
+            begin
+              visited := Set.add !visited v;
+              let neighbors = Map.find_exn g.adj v in
+              let l' = Set.to_list neighbors |> concat_rev_map ~f:visit in
+              v::l'
+            end
+        in
+        concat_rev_map (Map.keys g.adj) ~f:visit
+      in
+      let components = 
+        let visited    = ref set_empty in
+        let components = ref map_empty in
+        let rec assign root u =
+          if not (Set.mem !visited u) then
+            let neighbors = Map.find_exn adj_i u in
+            begin 
+              visited := Set.add !visited u;
+              components := Map.add_multi !components ~key:root ~data:u;
+              List.iter neighbors ~f:(assign root)
+            end
+        in
+        List.iter l ~f:(fun root -> assign root root);
+        !components
+      in
+      Map.data components
 
     let scc g : ('v, 'vwit) component WithVertex.t =
       condensate g @@ scc_list g
