@@ -9,6 +9,7 @@ sig
   type t
   val vmin : t
   val fresh : unit -> t
+  val to_string : t -> string
 
   include Core.Comparable.S with type t := t
   module Set : Core.Set.S with type Elt.t = t 
@@ -32,6 +33,7 @@ sig
   val of_adj_set_exn : ('v, 'a * ('v, 'wit) adj, 'wit) Core.Map.t -> ('v, 'a, 'wit) t
   val of_adj_set     : ('v, 'a * ('v, 'wit) adj, 'wit) Core.Map.t -> [`Ok of ('v, 'a, 'wit) t | `EdgeToInvalidVertex of 'v * 'v]
   val of_edge_list   : ('v, 'a, 'wit) Core.Map.t -> ('v edge) list  -> ('v, 'a, 'wit) t
+  val to_adj_list    : ('v, 'a, 'wit) t -> ('v * ('v list)) list
 
   module V :
   sig

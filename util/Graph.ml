@@ -34,8 +34,6 @@ struct
       )
   end
 
-  let of_adj_list l = failwith "Unimplemented"
-
   let of_adj_set (type v) (map: (v, 'attr * (v, 'wit) Set.t, 'wit) Map.t) = 
     let exception BadEdge of v * v in
     let v   = Map.map map ~f:fst in
@@ -53,13 +51,20 @@ struct
     with
     BadEdge (v, v') -> `EdgeToInvalidVertex (v, v')
     
-
   let of_adj_set_exn map = 
     match of_adj_set map with 
     | `Ok r -> r
     | _ -> raise VertexNotExist
 
+  let of_adj_list map = 
+    map
+    |> Map.map ~f:(fun (a, l) -> (a, Set.of_list (Map.comparator_s map) l))
+    |> of_adj_set_exn
+
   let of_edge_list l = failwith "Unimplemented"
+
+  let to_adj_list (g : ('v, 'a, 'wit) t) =
+    Map.to_alist g.adj |> List.map ~f:(fun (n, s) -> (n, Set.to_list s))
 
   let comparator g = (Map.comparator g.adj).compare
 
@@ -118,18 +123,65 @@ struct
 
   module StronglyConnectedComponents =
   struct
-    type ('v, 'wit) component = ('v, 'wit) Core.Set.t 
+    type ('v, 'wit) component = ('v, 'wit) Core.Set.t
 
-    let scc g : ('v, 'vwit) component WithVertex.t = 
-      let singleton v = Set.singleton (Map.comparator_s g.v) v in
-      (* This is a stub implementation that essentially says none of vertex 
-       * is related to any other vertex. Therefore toplogical sorting would have 
-       * placed all vertecies in the original order they came in. *)
-      g.v
-      |> Map.keys
-      |> List.map ~f:(fun v -> (Vertex.fresh (), (singleton v, Vertex.Set.empty)))
+    let condensate g l : ('v, 'vwit) component WithVertex.t =
+      let components = l
+        |> List.map ~f:(Set.of_list @@ Map.comparator_s g.v)
+        |> List.map ~f:(fun c -> (Vertex.fresh (), c))
+      in
+      let find_index u = fst @@ List.find_exn ~f:(fun (_, c) -> Set.mem c u) components in
+      let find_adj u = Vertex.Set.map ~f:find_index @@ Map.find_exn g.adj u in
+      let find_comp_adj c = c
+        |> Set.to_list
+        |> List.map ~f:find_adj
+        |> Vertex.Set.union_list
+      in
+      components
+      |> List.map ~f:(fun (i, c) -> (i, (c, Vertex.Set.remove (find_comp_adj c) i)))
       |> Vertex.Map.of_alist_exn
       |> of_adj_set_exn
+
+    let scc_list (g : ('v, 'a, 'vwit) t) : 'v list list =
+      let module Hashtbl = Stdlib.Hashtbl in
+      let compare = comparator g
+      and n = Map.length g.v in
+      let index = Hashtbl.create n
+      and root = Hashtbl.create n
+      and i = ref 0
+      and s = ref []
+      and res = ref [] in
+      let rec dfs u =
+        Hashtbl.replace index u !i;
+        Hashtbl.replace root u !i;
+        i := !i + 1;
+        s := u :: !s;
+        let adj = Map.find_exn g.adj u
+        and search v =
+          if not (Hashtbl.mem index v) then (
+            dfs v;
+            Hashtbl.replace root u
+              (min (Hashtbl.find root u) (Hashtbl.find root v)))
+          else if List.exists ~f:(fun w -> compare v w = 0) !s then
+            Hashtbl.replace root u
+              (min (Hashtbl.find root u) (Hashtbl.find root v))
+        in
+        Set.iter ~f:search adj;
+        if Hashtbl.find index u = Hashtbl.find root u then (
+          let c = ref [] and flag = ref true in
+          while !flag do
+            let v = List.hd_exn !s in
+            s := List.tl_exn !s;
+            c := v :: !c;
+            flag := compare u v <> 0
+          done;
+          res := !c :: !res)
+      in
+      List.iter ~f:(fun u -> if not (Hashtbl.mem index u) then dfs u) @@ Map.keys g.v;
+      !res
+
+    let scc g : ('v, 'vwit) component WithVertex.t =
+      condensate g @@ scc_list g
 
     let scc_topsort (g : ('v, 'a, 'vwit) t) : 'v list Sequence.t =
       let scc_g : ('v, 'vwit) Set.t WithVertex.t = scc g in

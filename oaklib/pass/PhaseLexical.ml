@@ -425,7 +425,7 @@ and lexical_decls decls =
       ) 
     |> Directed.of_adj_set_exn
   in
-  let solved_decls = 
+  let solved_decls =
     dep_graph
     |> Directed.StronglyConnectedComponents.scc_topsort
     |> Sequence.to_list
