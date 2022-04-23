@@ -77,10 +77,12 @@ end = struct
              @@ ElfPass.WarnParenDep.run ~max_depth:max_paren_depth m in
     let () = Driver.print_title "Analysis" "CodeLength" in
     let () = ElfPass.WarnCodeLen.dump_result src 
-             @@ ElfPass.WarnCodeLen.run ~spec:len_spec m in
+             @@ ElfPass.WarnCodeLen.run ~spec:len_spec m in 
     let () = Driver.print_title "Analysis" "OverDimension" in
     let () = ElfPass.WarnOverArity.dump_result src 
              @@ ElfPass.WarnOverArity.run ~spec:dim_spec m in
+    let () = Driver.print_title "Analysis" "Repetitive code" in
+    let () = ElfPass.WarnRepetitiveCode.RepetitiveCode.analysis_repetitive m src in
     modl
 
   let resolve_module_dependency (modules: t list) =
