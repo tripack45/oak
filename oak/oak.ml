@@ -43,7 +43,13 @@ let pipeline =
     Passman.log "== ResolveSym ==\n" |>>
     Passman.pass Pass.PhaseResolveSymbols.pass |>>
     Passman.dump
+  ) |>>
+  ( 
+    Passman.log "== Typechecking ==\n" |>>
+    Passman.pass Pass.PhaseTypechecking.pass |>>
+    Passman.dump
   )
+
 
 let _ = 
   Passman.exec (module OTarget.DirectSourced) (List.hd mods |> snd) mods pipeline

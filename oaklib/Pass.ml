@@ -133,3 +133,27 @@ struct
       to_string = to_string;
     }
 end
+
+module PhaseTypechecking = 
+struct
+  module P = PhaseTypecheck
+
+  type from_t = PhaseResolveSymbols.to_t
+  type to_t   = unit
+
+  let pass : (from_t, to_t) Passman.pass = 
+    let resolve _o mods = 
+      match P.run mods with
+      | P.Rst.Ok    (r, _warns)     -> Some ()
+      | P.Rst.Error (_errs, _warns) -> None
+    in
+    let to_string _resolved =
+      "Done! \n"
+      (* List.map resolved ~f:ElAstResolved.ToString.m_to_string |> String.concat ~sep:"\n" *)
+    in
+    {
+      name = "PhaseTypechecking";
+      func = resolve;
+      to_string = to_string;
+    }
+end
