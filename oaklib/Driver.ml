@@ -69,7 +69,7 @@ let rec traverse_path' path =
   file_ret @ dir_ret
 
 let find_elm (SrcFull src) =
-  let proj = Core.Filename.realpath src in
+  let proj = Filename_unix.realpath src in
   let src_dir = Core.Filename.parts proj in
   let res = traverse_path' src_dir in
   let res = Core.List.map res ~f:(

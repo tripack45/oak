@@ -31,10 +31,7 @@ module VarMake (M : ElAst.IDENT) () : BINDER with type id = M.t
   type t = int
   type id = M.t
 
-  module Map = Int.Map
-  module Set = Int.Set
-
-  let map : (id Map.t) ref = ref Map.empty
+  let map : (id Int.Map.t) ref = ref Int.Map.empty
   let count = ref 0
 
   let fresh ?id () = 
@@ -42,7 +39,7 @@ module VarMake (M : ElAst.IDENT) () : BINDER with type id = M.t
       Option.iter id ~f:(fun id -> map := Map.add_exn (!map) ~key:r ~data:id);
       count := r + 1; 
       r
-  let id t = Int.Map.find !map t
+  let id t = Map.find !map t
 
   let to_cannonical_string prefix t = prefix ^ Int.to_string t
 

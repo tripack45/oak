@@ -11,7 +11,13 @@
 (library
  (name oaklib)
  ; (flags :standard -rectypes)
- (libraries menhirLib core util)
+ (libraries 
+  menhirLib ; Parsing 
+  core ; Stdlib replacement
+  core_unix core_unix.filename_unix ; Unix manipulation
+  camlp-streams ;Streams
+  util ; Utils we built
+  )
  (preprocess (pps ppx_sexp_conv ppx_compare))
  )
 

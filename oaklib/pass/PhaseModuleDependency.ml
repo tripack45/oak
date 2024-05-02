@@ -33,7 +33,7 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
       fun (paths, path_map) (Import (path_node, as_con_opt, _)) -> 
         let path = Node.elem path_node in
         let path_map_add map ~key ~data ~on_dup =
-          match Map.add map ~key ~data with
+          match Core.Map.add map ~key ~data with
           | `Ok map    -> ok map
           | `Duplicate -> on_dup ()
         in
@@ -48,7 +48,7 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
             in
             path_map_add map' ~key:as_path ~data:path ~on_dup:(
               fun () ->
-                let path' = Map.find_exn path_map as_path in
+                let path' = Core.Map.find_exn path_map as_path in
                 err @@ ModAliasCollision ((path_node, con_node), path')
             )
           | None -> 
@@ -215,7 +215,7 @@ let expand_path_alias (Mod (mdecl, imports, decl_nodes)) =
     | None -> ok None 
     | Some path' -> 
       let (path, pos) = Node.both path' in
-        match Map.find path_dict path with 
+        match Core.Map.find path_dict path with 
       | Some path -> ok  @@ Some (Node.node path pos)
       | None      -> err @@ UndefinedModReference path'
 
@@ -270,7 +270,7 @@ let topsort ?(ignore_undefined=false) mods =
           in
           let key  = path
           and attr = (i, (path, m)) in
-          ok @@ Map.add_exn map ~key ~data:(attr, deps)
+          ok @@ Core.Map.add_exn map ~key ~data:(attr, deps)
       )
       >>| Directed.of_adj_set_exn
     in 

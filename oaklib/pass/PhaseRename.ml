@@ -386,17 +386,17 @@ let bind_pats ?prefix vctx pats =
       fun seen (varids, pat) -> 
         Rst.Seq.fold (Set.to_list varids) ~init:(ok seen) ~f:(
           fun seen varid ->
-            match VarId.Map.find seen varid with 
-            | None           -> ok @@ VarId.Map.add_exn seen ~key:varid ~data:pat
+            match Map.find seen varid with 
+            | None           -> ok @@ Map.add_exn seen ~key:varid ~data:pat
             | Some pat' -> 
-              let seen' = VarId.Map.add_exn seen ~key:varid ~data:pat in
+              let seen' = Map.add_exn seen ~key:varid ~data:pat in
               warn seen' (VarShadowingInArgs (varid, (pat, pat')))
         )
     )
   in
   let varids' = varids |> List.unzip |> fst |> VarId.Set.union_list in
   let ctx' =
-    VarId.Set.fold varids' ~init:vctx ~f:(
+    Set.fold varids' ~init:vctx ~f:(
       fun vctx varid ->
         let bvar  = Var.fresh ~id:(Option.value prefix ~default:var_prefix) () in
         (* Silently shadows previous definitions *)
@@ -409,8 +409,8 @@ let rec ftv_in_typ typ =
   | P.Unit 
   | P.TyCon _         -> TVarId.Set.empty 
   | P.TVar tv         -> TVarId.Set.singleton (Node.elem tv)
-  | P.Arrow (t1, t2)  -> TVarId.Set.union (ftv_in_typ t1) (ftv_in_typ t2)
-  | P.TApp  (t1, t2)  -> TVarId.Set.union (ftv_in_typ t1) (ftv_in_typ t2)
+  | P.Arrow (t1, t2)  -> Set.union (ftv_in_typ t1) (ftv_in_typ t2)
+  | P.TApp  (t1, t2)  -> Set.union (ftv_in_typ t1) (ftv_in_typ t2)
   | P.Tuple ts        -> TVarId.Set.union_list @@ List.map ts ~f:ftv_in_typ 
   | P.Record row      ->
     let ftv_in_fields fields =
@@ -418,7 +418,7 @@ let rec ftv_in_typ typ =
     in
     let rec ftv_in_row = function
       | P.RVar rv               -> TVarId.Set.singleton (Node.elem rv)
-      | P.Extension (r, fields) -> TVarId.Set.union (ftv_in_row r) (ftv_in_fields fields)
+      | P.Extension (r, fields) -> Set.union (ftv_in_row r) (ftv_in_fields fields)
       | P.Fields fields         -> ftv_in_fields fields
     in 
     ftv_in_row row
@@ -481,7 +481,7 @@ let ftv_in_pat pat =
     | P.DCon (_, pats) -> List.fold pats ~init:acc ~f
     | P.Var (_, annot) -> 
       match annot with 
-      | Some (_, typ)  -> TVarId.Set.union (ftv_in_typ typ) acc
+      | Some (_, typ)  -> Set.union (ftv_in_typ typ) acc
       | None -> acc
   in
   f TVarId.Set.empty pat

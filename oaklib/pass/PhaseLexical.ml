@@ -215,8 +215,8 @@ let rec extract_pat (pat : E.pat') : (DConId.Set.t * VarId.Set.t) rslt =
     let* binded : VarId.Set.t = 
       R.Seq.fold binds ~init:(ok VarId.Set.empty) ~f:(
         fun binded to_bind -> 
-          match VarId.Set.inter binded to_bind |> VarId.Set.choose with
-          | None     -> ok  @@ VarId.Set.union binded to_bind
+          match Set.inter binded to_bind |> Set.choose with
+          | None     -> ok  @@ Set.union binded to_bind
           | Some var -> err @@ RepeatedBinder (pat, var)
       )
     in
@@ -235,7 +235,7 @@ let rec extract_pat (pat : E.pat') : (DConId.Set.t * VarId.Set.t) rslt =
   | E.DCon (c, pats) ->
     let* (dcons, bvs) = extract_pats pats in 
     match Node.elem c with 
-    | QDCon (None, dcon) -> ok (DConId.Set.add dcons (Node.elem dcon), bvs)
+    | QDCon (None, dcon) -> ok (Set.add dcons (Node.elem dcon), bvs)
     | QDCon (Some _, _)  -> ok (dcons, bvs)
 
 (* Functions that annotates letm when provided a map of annotations *)
@@ -395,7 +395,7 @@ and lexical_decls decls =
           let decl' = `Val (node @@ L.Pat (pat', e')) in
           let decl_map' = Map.add_exn decl_map ~key:idx ~data:{deps; decl; decl'} in
           let* binder_map' =
-            R.Seq.fold (VarId.Set.to_list binded_vars) ~init:(ok binder_map) ~f:(
+            R.Seq.fold (Set.to_list binded_vars) ~init:(ok binder_map) ~f:(
               fun binder_map var -> 
                 let key = Use.IdVar var in
                 match add_or_dup binder_map ~key ~data:idx with 
@@ -417,7 +417,7 @@ and lexical_decls decls =
       fun ({deps; _} as attr) -> 
         let deps = 
           Decl.Set.filter_map deps ~f:(
-            fun use -> Use.Map.find binder_map use
+            fun use -> Map.find binder_map use
           )
         in 
         (attr, deps)
@@ -430,9 +430,9 @@ and lexical_decls decls =
     |> Sequence.to_list
   in
   let letm = List.fold_right solved_decls ~init:L.LetUnit ~f:(scc_component_to_letm dep_graph) in
-  let binded_fis = Use.Map.key_set binder_map in
+  let binded_fis = Map.key_set binder_map in
   let fis = 
-    let uses = Decl.Map.to_alist decl_map 
+    let uses = Map.to_alist decl_map 
                |> List.map ~f:snd
                |> List.map ~f:(fun {deps; _} -> deps)
                |> merge_fis
@@ -442,7 +442,7 @@ and lexical_decls decls =
   (* Check that all type annotations have been assigned *)
   let* _ = 
     let binded_vars = VarId.Set.filter_map binded_fis ~f:(function Use.IdVar v -> Some v | _ -> None) in
-    let annotated = VarId.Map.key_set annots in
+    let annotated = Map.key_set annots in
     let undefined = annotated <-> binded_vars in
     match Set.choose undefined with 
     | None     -> ok ()

@@ -142,7 +142,7 @@ struct
         let comp_adj =
           find_comp_adj c
         in
-        (i, ((c, Vertex.Set.mem comp_adj i), Vertex.Set.remove comp_adj i)))
+        (i, ((c, Set.mem comp_adj i), Set.remove comp_adj i)))
       |> Vertex.Map.of_alist_exn
       |> of_adj_set_exn
 
